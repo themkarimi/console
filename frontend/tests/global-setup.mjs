@@ -449,27 +449,14 @@ async function startBackendServer(network, isEnterprise, imageTag, state, devMod
     console.log(`  - Port: 3000:${hostPort}`);
     console.log('  - Command: --config.filepath=/etc/console/config.yaml');
 
-    // Create container with health check and restart policy
+    // Create container - don't use withWaitStrategy so we can see logs if it fails
     const container = new GenericContainer(imageTag)
       .withNetwork(network)
       .withNetworkAliases('console-backend')
       .withNetworkMode(network.getName())
       .withExposedPorts({ container: 3000, host: hostPort })
       .withBindMounts(bindMounts)
-      .withCommand(['--config.filepath=/etc/console/config.yaml'])
-      .withHealthCheck({
-        test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3000/api/cluster/config'],
-        interval: 5000, // Check every 5 seconds
-        timeout: 3000,  // 3 second timeout
-        retries: 5,     // Retry 5 times before marking unhealthy
-        startPeriod: 10_000, // Give 10 seconds for app to start
-      })
-      .withRestartPolicy({
-        Name: 'on-failure',
-        MaximumRetryCount: 3, // Restart up to 3 times on failure
-      })
-      .withWaitStrategy(Wait.forHealthCheck())
-      .withStartupTimeout(120_000); // 2 minutes total startup timeout
+      .withCommand(['--config.filepath=/etc/console/config.yaml']);
 
     console.log('Calling container.start()...');
 
@@ -722,19 +709,6 @@ async function startBackendServerWithConfig(
       .withExposedPorts({ container: 3000, host: externalPort })
       .withBindMounts(bindMounts)
       .withCommand(['--config.filepath=/etc/console/config.yaml'])
-      .withHealthCheck({
-        test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3000/api/cluster/config'],
-        interval: 5000,
-        timeout: 3000,
-        retries: 5,
-        startPeriod: 10_000,
-      })
-      .withRestartPolicy({
-        Name: 'on-failure',
-        MaximumRetryCount: 3,
-      })
-      .withWaitStrategy(Wait.forHealthCheck())
-      .withStartupTimeout(120_000)
       .start();
 
     containerId = backend.getId();
