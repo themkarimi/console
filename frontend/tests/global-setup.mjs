@@ -702,8 +702,10 @@ async function startBackendServerWithConfig(
   }
 
   let containerId;
+  let backend;
+
   try {
-    const backend = await new GenericContainer(imageTag)
+    backend = await new GenericContainer(imageTag)
       .withNetwork(network)
       .withNetworkAliases(networkAlias)
       .withExposedPorts({ container: 3000, host: externalPort })
@@ -714,19 +716,61 @@ async function startBackendServerWithConfig(
     containerId = backend.getId();
     state.backendId = containerId;
     state.backendContainer = backend;
+    console.log(`✓ Container started with ID: ${containerId}`);
 
+  } catch (startError) {
+    console.error(`Error during container.start() on port ${externalPort}:`, startError.message);
+
+    // Extract container ID from error message if available
+    const containerIdMatch = startError.message.match(CONTAINER_ID_REGEX);
+    const failedContainerId = containerIdMatch ? containerIdMatch[1] : null;
+
+    if (failedContainerId) {
+      console.log(`Found container ID from error: ${failedContainerId}`);
+      containerId = failedContainerId;
+      state.backendId = failedContainerId;
+
+      try {
+        console.log('=== CONTAINER LOGS START ===');
+        const { stdout: logs } = await execAsync(`docker logs ${failedContainerId} 2>&1`);
+        console.log(logs || '(no logs)');
+        console.log('=== CONTAINER LOGS END ===');
+
+        const { stdout: stateJson } = await execAsync(
+          `docker inspect ${failedContainerId} --format='{{json .State}}'`
+        );
+        console.log('Container state:', JSON.stringify(JSON.parse(stateJson), null, 2));
+      } catch (inspectError) {
+        console.error('Failed to inspect container:', inspectError.message);
+      }
+    }
+
+    throw startError;
+  }
+
+  try {
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Check if container is still running
     const { stdout: status } = await execAsync(`docker inspect ${containerId} --format='{{.State.Status}}'`);
     if (status.trim() !== 'running') {
+      console.error(`Container ${containerId} is not running (status: ${status.trim()})`);
       const { stdout: logs } = await execAsync(`docker logs ${containerId} 2>&1`);
       const { stdout: exitCode } = await execAsync(`docker inspect ${containerId} --format='{{.State.ExitCode}}'`);
-      console.error(`Container ${containerId} stopped (exit ${exitCode.trim()}):`);
+      console.error(`Exit code: ${exitCode.trim()}`);
+      console.error('Container logs:');
       console.error(logs);
       throw new Error(`Container stopped immediately with status: ${status.trim()}`);
     }
 
+    console.log(`✓ Container ${containerId} is running`);
+
+    // Show initial logs
+    console.log('Initial container logs (last 30 lines):');
+    const { stdout: logs } = await execAsync(`docker logs ${containerId} 2>&1 | tail -30`);
+    console.log(logs || '(no logs yet)');
+
+    console.log(`Waiting for port ${externalPort} to be ready...`);
     await waitForPort(externalPort, 60, 1000);
     console.log(`✓ Backend ready at http://localhost:${externalPort}`);
   } catch (error) {
@@ -734,11 +778,14 @@ async function startBackendServerWithConfig(
 
     if (containerId) {
       try {
+        console.log('Fetching full diagnostics...');
         const { stdout: logs } = await execAsync(`docker logs ${containerId} 2>&1`);
         const { stdout: inspect } = await execAsync(`docker inspect ${containerId}`);
         const inspectJson = JSON.parse(inspect);
-        console.error('Container state:', JSON.stringify(inspectJson[0].State, null, 2));
-        console.error('Container logs:', logs);
+        console.error('=== FULL CONTAINER LOGS ===');
+        console.error(logs);
+        console.error('=== CONTAINER STATE ===');
+        console.error(JSON.stringify(inspectJson[0].State, null, 2));
       } catch (logError) {
         console.error('Could not fetch container diagnostics:', logError.message);
       }
