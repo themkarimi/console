@@ -704,7 +704,11 @@ async function startBackendServerWithConfig(
   let containerId;
   let backend;
 
+  console.log(`Attempting to start container on port ${externalPort}...`);
+  console.log('Bind mounts:', JSON.stringify(bindMounts, null, 2));
+
   try {
+    console.log('Calling GenericContainer.start()...');
     backend = await new GenericContainer(imageTag)
       .withNetwork(network)
       .withNetworkAliases(networkAlias)
@@ -712,6 +716,7 @@ async function startBackendServerWithConfig(
       .withBindMounts(bindMounts)
       .withCommand(['--config.filepath=/etc/console/config.yaml'])
       .start();
+    console.log('GenericContainer.start() completed successfully');
 
     containerId = backend.getId();
     state.backendId = containerId;
@@ -730,19 +735,52 @@ async function startBackendServerWithConfig(
       containerId = failedContainerId;
       state.backendId = failedContainerId;
 
+      // Try multiple approaches to get logs since container may be cleaned up quickly
       try {
+        console.log('Attempting to get container logs (approach 1: direct docker logs)...');
+        const { stdout: logs } = await execAsync(`docker logs ${failedContainerId} 2>&1`, { timeout: 5000 });
         console.log('=== CONTAINER LOGS START ===');
-        const { stdout: logs } = await execAsync(`docker logs ${failedContainerId} 2>&1`);
         console.log(logs || '(no logs)');
         console.log('=== CONTAINER LOGS END ===');
+      } catch (logsError) {
+        console.log(`Direct logs failed: ${logsError.message}`);
 
+        // Try to find container in docker ps -a
+        try {
+          console.log('Attempting to find container in docker ps -a...');
+          const { stdout: containerList } = await execAsync(`docker ps -a --filter id=${failedContainerId} --format '{{.ID}} {{.Status}}'`);
+          console.log(`Container status from ps: ${containerList || 'not found'}`);
+
+          if (containerList.includes(failedContainerId)) {
+            // Container still exists, try logs again
+            const { stdout: logs2 } = await execAsync(`docker logs ${failedContainerId} 2>&1`);
+            console.log('=== CONTAINER LOGS START (attempt 2) ===');
+            console.log(logs2 || '(no logs)');
+            console.log('=== CONTAINER LOGS END ===');
+          } else {
+            console.log('Container has been removed - checking recent containers with same image...');
+            const { stdout: recentContainers } = await execAsync(
+              `docker ps -a --filter ancestor=${imageTag} --format '{{.ID}} {{.Status}} {{.CreatedAt}}' | head -5`
+            );
+            console.log('Recent containers from this image:');
+            console.log(recentContainers);
+          }
+        } catch (psError) {
+          console.error(`Failed to check docker ps: ${psError.message}`);
+        }
+      }
+
+      // Try to get container state
+      try {
         const { stdout: stateJson } = await execAsync(
           `docker inspect ${failedContainerId} --format='{{json .State}}'`
         );
         console.log('Container state:', JSON.stringify(JSON.parse(stateJson), null, 2));
       } catch (inspectError) {
-        console.error('Failed to inspect container:', inspectError.message);
+        console.log(`Failed to inspect container state: ${inspectError.message}`);
       }
+    } else {
+      console.log('Could not extract container ID from error - cannot fetch logs');
     }
 
     throw startError;
