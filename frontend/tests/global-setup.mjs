@@ -709,13 +709,24 @@ async function startBackendServerWithConfig(
 
   try {
     console.log('Calling GenericContainer.start()...');
-    backend = await new GenericContainer(imageTag)
+    const containerBuilder = new GenericContainer(imageTag)
       .withNetwork(network)
       .withNetworkAliases(networkAlias)
       .withExposedPorts({ container: 3000, host: externalPort })
       .withBindMounts(bindMounts)
       .withCommand(['--config.filepath=/etc/console/config.yaml'])
-      .start();
+      .withLogConsumer((stream) => {
+        stream.on('data', (line) => console.log(`[CONTAINER LOG] ${line}`));
+        stream.on('err', (line) => console.error(`[CONTAINER ERR] ${line}`));
+        stream.on('end', () => console.log('[CONTAINER] Stream ended'));
+      });
+
+    // In CI, start container with logs streaming to catch failures
+    if (process.env.CI) {
+      console.log('CI detected - container logs will be streamed in real-time');
+    }
+
+    backend = await containerBuilder.start();
     console.log('GenericContainer.start() completed successfully');
 
     containerId = backend.getId();
