@@ -132,6 +132,7 @@ func (sm *SessionManager) ClearSession(w http.ResponseWriter) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   sm.secure,
 	})
 }
 

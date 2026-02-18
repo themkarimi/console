@@ -47,6 +47,7 @@ func (api *API) handleOIDCLogin() http.HandlerFunc {
 			MaxAge:   300, // 5 minutes
 			HttpOnly: true,
 			SameSite: http.SameSiteLaxMode,
+			Secure:   api.Cfg.Login.OIDC.SessionCookieSecure,
 		})
 
 		authURL := api.OIDCService.AuthCodeURL(state)
@@ -69,10 +70,13 @@ func (api *API) handleOIDCCallback() http.HandlerFunc {
 		}
 		// Clear the state cookie.
 		http.SetCookie(w, &http.Cookie{
-			Name:   stateCookieName,
-			Value:  "",
-			Path:   "/auth/callback/oidc",
-			MaxAge: -1,
+			Name:     stateCookieName,
+			Value:    "",
+			Path:     "/auth/callback/oidc",
+			MaxAge:   -1,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+			Secure:   api.Cfg.Login.OIDC.SessionCookieSecure,
 		})
 
 		queryState := r.URL.Query().Get("state")
