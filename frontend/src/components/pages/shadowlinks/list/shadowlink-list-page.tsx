@@ -24,6 +24,7 @@ import { useListShadowLinksQuery } from 'react-query/api/shadowlink';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { uiState } from 'state/ui-state';
+import { api } from 'state/backend-api';
 
 import {
   ShadowLinkEmptyState,
@@ -204,7 +205,7 @@ export const ShadowLinkListPage = () => {
             <TooltipTrigger asChild>
               <span className="inline-block">
                 <Button
-                  disabled={hasShadowLink}
+                  disabled={hasShadowLink || api.userData?.canCreateTopics === false}
                   onClick={() => navigate('/shadowlinks/create')}
                   size="sm"
                   variant="secondary"
@@ -214,9 +215,13 @@ export const ShadowLinkListPage = () => {
                 </Button>
               </span>
             </TooltipTrigger>
-            {Boolean(hasShadowLink) && (
+            {(hasShadowLink || api.userData?.canCreateTopics === false) && (
               <TooltipContent>
-                <p>Only one shadowlink can be created at this time</p>
+                <p>
+                  {api.userData?.canCreateTopics === false
+                    ? "You don't have permission to create shadow links"
+                    : 'Only one shadowlink can be created at this time'}
+                </p>
               </TooltipContent>
             )}
           </Tooltip>

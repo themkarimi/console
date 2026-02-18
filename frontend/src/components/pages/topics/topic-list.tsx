@@ -181,20 +181,23 @@ const TopicList: FC = () => {
       </Box>
       <Section>
         <div className="flex items-center justify-between gap-4">
-          <Button
-            className="min-w-[160px]"
-            colorScheme="brand"
-            data-testid="create-topic-button"
-            disabledReason={
-              api.userData?.canCreateTopics === false
-                ? "You don't have permission to create topics"
-                : undefined
-            }
-            onClick={() => showCreateTopicModal()}
-            variant="solid"
+          <Tooltip
+            hasArrow
+            isDisabled={api.userData?.canCreateTopics !== false}
+            label="You don't have permission to create topics"
+            placement="top"
           >
-            Create topic
-          </Button>
+            <Button
+              className="min-w-[160px]"
+              colorScheme="brand"
+              data-testid="create-topic-button"
+              isDisabled={api.userData?.canCreateTopics === false}
+              onClick={() => showCreateTopicModal()}
+              variant="solid"
+            >
+              Create topic
+            </Button>
+          </Tooltip>
 
           <Checkbox
             data-testid="show-internal-topics-checkbox"

@@ -290,7 +290,7 @@ class RpConnectPipelinesList extends PageComponent<{}> {
                           });
                       });
                     }}
-                    disabledReason={api.userData?.canDeleteTransforms === false ? "You don't have the 'canDeleteTransforms' permission" : undefined}
+                    isDisabled={api.userData?.canDeleteTransforms === false}
                     variant="icon"
                   >
                     <TrashIcon />

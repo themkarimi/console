@@ -723,12 +723,19 @@ const AclsTab = observer((_: { principalGroups: AclPrincipalGroup[] }) => {
 
         <AlertDeleteFailed aclFailed={aclFailed} onClose={() => setAclFailed(null)} />
 
-        <Button
-          data-testid="create-acls"
-          onClick={() => {
-            navigate('create');
-            setEditorType('create');
-            setEdittingPrincipalGroup(
+        <Tooltip
+          hasArrow
+          isDisabled={api.userData?.canCreateAcls !== false}
+          label="You don't have permission to create ACLs"
+          placement="top"
+        >
+          <Button
+            data-testid="create-acls"
+            isDisabled={api.userData?.canCreateAcls === false}
+            onClick={() => {
+              navigate('create');
+              setEditorType('create');
+              setEdittingPrincipalGroup(
               observable({
                 host: '',
                 principalType: 'User',
@@ -745,6 +752,7 @@ const AclsTab = observer((_: { principalGroups: AclPrincipalGroup[] }) => {
         >
           Create ACLs
         </Button>
+        </Tooltip>
 
         <Box py={4}>
           <DataTable<{

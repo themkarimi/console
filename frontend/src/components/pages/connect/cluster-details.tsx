@@ -90,11 +90,15 @@ class KafkaClusterDetails extends PageComponent<{ clusterName: string }> {
             <div style={{ display: 'flex', marginBottom: '.5em' }}>
               <Tooltip
                 hasArrow={true}
-                isDisabled={cluster?.canEditCluster !== false}
-                label={"You don't have 'editConnectCluster' permissions for this connect cluster"}
+                isDisabled={cluster?.canEditCluster !== false && api.userData?.canCreateTopics !== false}
+                label={
+                  api.userData?.canCreateTopics === false
+                    ? "You don't have permission to create connectors"
+                    : "You don't have 'editConnectCluster' permissions for this connect cluster"
+                }
                 placement="top"
               >
-                {cluster?.canEditCluster === false ? (
+                {cluster?.canEditCluster === false || api.userData?.canCreateTopics === false ? (
                   <Button colorScheme="brand" isDisabled variant="solid">
                     Create connector
                   </Button>

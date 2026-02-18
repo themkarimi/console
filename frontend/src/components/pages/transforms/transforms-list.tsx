@@ -19,6 +19,7 @@ import {
   SearchField,
   Stack,
   Text,
+  Tooltip,
 } from '@redpanda-data/ui';
 import { CheckIcon, CloseIcon, TrashIcon } from 'components/icons';
 import { makeObservable, observable } from 'mobx';
@@ -130,18 +131,24 @@ class TransformsList extends PageComponent {
         </Text>
 
         <Stack direction="row" mb="6">
-          <ReactRouterLink to="/transforms-setup">
-            <Button
-              disabledReason={
-                api.userData?.canCreateTransforms === false
-                  ? "You don't have the 'canCreateTransforms' permission"
-                  : undefined
-              }
-              variant="outline"
-            >
-              Create transform
-            </Button>
-          </ReactRouterLink>
+          <Tooltip
+            hasArrow
+            isDisabled={api.userData?.canCreateTransforms !== false}
+            label="You don't have the 'canCreateTransforms' permission"
+            placement="top"
+          >
+            {api.userData?.canCreateTransforms === false ? (
+              <Button isDisabled variant="outline">
+                Create transform
+              </Button>
+            ) : (
+              <ReactRouterLink to="/transforms-setup">
+                <Button variant="outline">
+                  Create transform
+                </Button>
+              </ReactRouterLink>
+            )}
+          </Tooltip>
 
           <Button isDisabled variant="outline">
             Export metrics
@@ -242,7 +249,7 @@ class TransformsList extends PageComponent {
                           });
                       });
                     }}
-                    disabledReason={api.userData?.canDeleteTransforms === false ? "You don't have the 'canDeleteTransforms' permission" : undefined}
+                    isDisabled={api.userData?.canDeleteTransforms === false}
                     variant="icon"
                   >
                     <TrashIcon />

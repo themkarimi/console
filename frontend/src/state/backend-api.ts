@@ -516,6 +516,7 @@ const apiStore = {
           canCreateTopics: r.permissions?.kafkaClusterOperations.includes(KafkaAclOperation.CREATE),
           canDeleteTopics: r.permissions?.kafkaClusterOperations.includes(KafkaAclOperation.DELETE),
           canProduceMessages: r.permissions?.kafkaClusterOperations.includes(KafkaAclOperation.WRITE),
+          canCreateAcls: r.permissions?.kafkaClusterOperations.includes(KafkaAclOperation.ALTER),
         } as UserData;
 
         // Track user in analytics after successful authentication
