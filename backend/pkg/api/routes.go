@@ -80,6 +80,7 @@ func (api *API) setupConnectWithGRPCGateway(r chi.Router) {
 	observerInterceptor := commoninterceptor.NewObserver(apiProm.ObserverAdapter())
 	baseInterceptors := []connect.Interceptor{
 		observerInterceptor,
+		interceptor.NewAuditLogInterceptor(loggerpkg.Named(api.Logger, "audit_log")),
 		interceptor.NewErrorLogInterceptor(api.Logger),
 		interceptor.NewRequestValidationInterceptor(v, loggerpkg.Named(api.Logger, "validator")),
 		interceptor.NewEndpointCheckInterceptor(&api.Cfg.Console.API, loggerpkg.Named(api.Logger, "endpoint_checker")),
