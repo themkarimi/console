@@ -282,3 +282,194 @@ func TestDeduplicateScopes_AddsOpenID(t *testing.T) {
 	got := deduplicateScopes([]string{"profile"})
 	assert.Equal(t, []string{"openid", "profile"}, got)
 }
+
+// ---- ResolveResourcePermissions tests ----
+
+func TestService_ResolveResourcePermissions(t *testing.T) {
+	tests := []struct {
+		name               string
+		permissionBindings []config.PermissionBinding
+		groups             []string
+		wantLen            int
+		wantPerms          []config.ResourcePermission
+	}{
+		{
+			name:               "no bindings returns nil",
+			permissionBindings: nil,
+			groups:             []string{"group-a"},
+			wantLen:            0,
+		},
+		{
+			name: "user in matching group receives permissions",
+			permissionBindings: []config.PermissionBinding{
+				{Groups: []string{"group-a"}, Permissions: []config.ResourcePermission{
+					{ResourceType: config.ResourceTypeTopic, Pattern: `a\..*`, Permission: config.ResourcePermissionLevelRead},
+				}},
+			},
+			groups:  []string{"group-a"},
+			wantLen: 1,
+			wantPerms: []config.ResourcePermission{
+				{ResourceType: config.ResourceTypeTopic, Pattern: `a\..*`, Permission: config.ResourcePermissionLevelRead},
+			},
+		},
+		{
+			name: "user not in any group receives no permissions",
+			permissionBindings: []config.PermissionBinding{
+				{Groups: []string{"group-a"}, Permissions: []config.ResourcePermission{
+					{ResourceType: config.ResourceTypeTopic, Pattern: `a\..*`, Permission: config.ResourcePermissionLevelRead},
+				}},
+			},
+			groups:  []string{"group-b"},
+			wantLen: 0,
+		},
+		{
+			name: "user in multiple groups accumulates permissions with dedup",
+			permissionBindings: []config.PermissionBinding{
+				{Groups: []string{"group-a"}, Permissions: []config.ResourcePermission{
+					{ResourceType: config.ResourceTypeTopic, Pattern: `a\..*`, Permission: config.ResourcePermissionLevelRead},
+				}},
+				{Groups: []string{"group-b"}, Permissions: []config.ResourcePermission{
+					{ResourceType: config.ResourceTypeTopic, Pattern: `a\..*`, Permission: config.ResourcePermissionLevelRead}, // duplicate
+					{ResourceType: config.ResourceTypeConsumerGroup, Pattern: `cg-.*`, Permission: config.ResourcePermissionLevelWrite},
+				}},
+			},
+			groups:  []string{"group-a", "group-b"},
+			wantLen: 2, // duplicate deduplicated
+		},
+		{
+			name: "consumer group permission binding",
+			permissionBindings: []config.PermissionBinding{
+				{Groups: []string{"cg-team"}, Permissions: []config.ResourcePermission{
+					{ResourceType: config.ResourceTypeConsumerGroup, Pattern: `cg-team-.*`, Permission: config.ResourcePermissionLevelWrite},
+				}},
+			},
+			groups:  []string{"cg-team"},
+			wantLen: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &Service{
+				cfg: config.OIDCConfig{
+					PermissionBindings: tt.permissionBindings,
+				},
+			}
+			got := svc.ResolveResourcePermissions(tt.groups)
+			assert.Len(t, got, tt.wantLen)
+			if tt.wantPerms != nil {
+				assert.Equal(t, tt.wantPerms, got)
+			}
+		})
+	}
+}
+
+// ---- CanAccessResource tests ----
+
+func TestUserIdentity_CanAccessResource(t *testing.T) {
+	tests := []struct {
+		name         string
+		permissions  []config.ResourcePermission
+		resourceType config.ResourceType
+		resourceName string
+		required     config.ResourcePermissionLevel
+		want         bool
+	}{
+		{
+			name:         "no permissions configured grants access (backward compat)",
+			permissions:  nil,
+			resourceType: config.ResourceTypeTopic,
+			resourceName: "any-topic",
+			required:     config.ResourcePermissionLevelRead,
+			want:         true,
+		},
+		{
+			name: "read permission on matching topic grants read",
+			permissions: []config.ResourcePermission{
+				{ResourceType: config.ResourceTypeTopic, Pattern: `a\..*`, Permission: config.ResourcePermissionLevelRead},
+			},
+			resourceType: config.ResourceTypeTopic,
+			resourceName: "a.orders",
+			required:     config.ResourcePermissionLevelRead,
+			want:         true,
+		},
+		{
+			name: "read permission on matching topic does not grant write",
+			permissions: []config.ResourcePermission{
+				{ResourceType: config.ResourceTypeTopic, Pattern: `a\..*`, Permission: config.ResourcePermissionLevelRead},
+			},
+			resourceType: config.ResourceTypeTopic,
+			resourceName: "a.orders",
+			required:     config.ResourcePermissionLevelWrite,
+			want:         false,
+		},
+		{
+			name: "write permission covers read",
+			permissions: []config.ResourcePermission{
+				{ResourceType: config.ResourceTypeTopic, Pattern: `a\..*`, Permission: config.ResourcePermissionLevelWrite},
+			},
+			resourceType: config.ResourceTypeTopic,
+			resourceName: "a.orders",
+			required:     config.ResourcePermissionLevelRead,
+			want:         true,
+		},
+		{
+			name: "admin permission covers write",
+			permissions: []config.ResourcePermission{
+				{ResourceType: config.ResourceTypeTopic, Pattern: `a\..*`, Permission: config.ResourcePermissionLevelAdmin},
+			},
+			resourceType: config.ResourceTypeTopic,
+			resourceName: "a.orders",
+			required:     config.ResourcePermissionLevelWrite,
+			want:         true,
+		},
+		{
+			name: "non-matching pattern denies access",
+			permissions: []config.ResourcePermission{
+				{ResourceType: config.ResourceTypeTopic, Pattern: `a\..*`, Permission: config.ResourcePermissionLevelRead},
+			},
+			resourceType: config.ResourceTypeTopic,
+			resourceName: "b.orders",
+			required:     config.ResourcePermissionLevelRead,
+			want:         false,
+		},
+		{
+			name: "wrong resource type denies access",
+			permissions: []config.ResourcePermission{
+				{ResourceType: config.ResourceTypeTopic, Pattern: `a\..*`, Permission: config.ResourcePermissionLevelRead},
+			},
+			resourceType: config.ResourceTypeConsumerGroup,
+			resourceName: "a.orders",
+			required:     config.ResourcePermissionLevelRead,
+			want:         false,
+		},
+		{
+			name: "consumer group permission matches correctly",
+			permissions: []config.ResourcePermission{
+				{ResourceType: config.ResourceTypeConsumerGroup, Pattern: `cg-team-.*`, Permission: config.ResourcePermissionLevelWrite},
+			},
+			resourceType: config.ResourceTypeConsumerGroup,
+			resourceName: "cg-team-orders",
+			required:     config.ResourcePermissionLevelRead,
+			want:         true,
+		},
+		{
+			name: "pattern anchored - no partial match",
+			permissions: []config.ResourcePermission{
+				{ResourceType: config.ResourceTypeTopic, Pattern: `orders`, Permission: config.ResourcePermissionLevelRead},
+			},
+			resourceType: config.ResourceTypeTopic,
+			resourceName: "a.orders.extra",
+			required:     config.ResourcePermissionLevelRead,
+			want:         false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			identity := &UserIdentity{ResourcePermissions: tt.permissions}
+			got := identity.CanAccessResource(tt.resourceType, tt.resourceName, tt.required)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

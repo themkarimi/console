@@ -178,6 +178,11 @@ func (api *API) sessionInjectMiddleware(next http.Handler) http.Handler {
 				Groups:      session.Groups,
 				Role:        session.Role,
 			}
+			// Recompute resource-level permissions from the stored groups so
+			// that any config changes take effect without requiring a new login.
+			if api.OIDCService != nil {
+				identity.ResourcePermissions = api.OIDCService.ResolveResourcePermissions(session.Groups)
+			}
 			r = r.WithContext(oidc.WithUserIdentity(r.Context(), identity))
 		}
 		next.ServeHTTP(w, r)
