@@ -50,11 +50,11 @@ func (in *AuditLogInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFu
 		}
 
 		attrs := []slog.Attr{
-			slog.String("timestamp", start.Format(time.RFC3339)),
+			slog.Time("timestamp", start),
 			slog.String("procedure", procedure),
 			slog.String("peer_address", peerAddr),
 			slog.String("status", status),
-			slog.String("duration", duration.String()),
+			slog.Duration("duration", duration),
 		}
 
 		if identity := oidc.UserIdentityFromContext(ctx); identity != nil {
