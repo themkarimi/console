@@ -12,6 +12,8 @@ package config
 import (
 	"errors"
 	"flag"
+	"fmt"
+	"regexp"
 )
 
 // Login contains configuration for authenticating users who access Redpanda Console.
@@ -87,6 +89,12 @@ type OIDCConfig struct {
 	// a DefaultRole is set.
 	RoleBindings []RoleBinding `yaml:"roleBindings"`
 
+	// PermissionBindings maps OIDC groups to fine-grained resource permissions
+	// using regex patterns.  These supplement the global role assigned via
+	// RoleBindings, allowing specific groups to access only the topics or
+	// consumer groups whose names match the configured patterns.
+	PermissionBindings []PermissionBinding `yaml:"permissionBindings"`
+
 	// DefaultRole is the role assigned to users who do not match any
 	// RoleBinding.  Leave empty to deny access to unmatched users.
 	DefaultRole string `yaml:"defaultRole"`
@@ -118,6 +126,50 @@ type RoleBinding struct {
 	RoleName string `yaml:"roleName"`
 	// Groups is the list of OIDC group names that are granted this role.
 	Groups []string `yaml:"groups"`
+}
+
+// ResourceType identifies the kind of resource a permission applies to.
+type ResourceType string
+
+const (
+	// ResourceTypeTopic grants permissions on Kafka topics.
+	ResourceTypeTopic ResourceType = "topic"
+	// ResourceTypeConsumerGroup grants permissions on Kafka consumer groups.
+	ResourceTypeConsumerGroup ResourceType = "consumerGroup"
+)
+
+// ResourcePermissionLevel defines the level of access granted on a resource.
+type ResourcePermissionLevel string
+
+const (
+	// ResourcePermissionLevelRead grants read-only access to matching resources.
+	ResourcePermissionLevelRead ResourcePermissionLevel = "read"
+	// ResourcePermissionLevelWrite grants read and write access to matching resources.
+	ResourcePermissionLevelWrite ResourcePermissionLevel = "write"
+	// ResourcePermissionLevelAdmin grants full admin access to matching resources.
+	ResourcePermissionLevelAdmin ResourcePermissionLevel = "admin"
+)
+
+// ResourcePermission grants a specific permission level on resources whose
+// names match a given regex pattern.
+type ResourcePermission struct {
+	// ResourceType is the kind of resource this permission applies to
+	// (e.g. "topic", "consumerGroup").
+	ResourceType ResourceType `yaml:"resourceType"`
+	// Pattern is a regular expression matched against resource names.
+	Pattern string `yaml:"pattern"`
+	// Permission is the access level granted: "read", "write", or "admin".
+	Permission ResourcePermissionLevel `yaml:"permission"`
+}
+
+// PermissionBinding maps a set of OIDC groups to fine-grained resource
+// permissions using regex patterns.  Users who belong to any of the listed
+// groups receive all the listed ResourcePermissions.
+type PermissionBinding struct {
+	// Groups is the list of OIDC group names that receive these permissions.
+	Groups []string `yaml:"groups"`
+	// Permissions is the list of resource-level permissions to grant.
+	Permissions []ResourcePermission `yaml:"permissions"`
 }
 
 // RegisterFlags registers sensitive OIDCConfig values as CLI flags.
@@ -162,6 +214,32 @@ func (c *OIDCConfig) Validate() error {
 		}
 		if len(rb.Groups) == 0 {
 			return errors.New("each login.oidc.roleBindings entry must have at least one group")
+		}
+	}
+	for i, pb := range c.PermissionBindings {
+		if len(pb.Groups) == 0 {
+			return fmt.Errorf("login.oidc.permissionBindings[%d] must have at least one group", i)
+		}
+		if len(pb.Permissions) == 0 {
+			return fmt.Errorf("login.oidc.permissionBindings[%d] must have at least one permission", i)
+		}
+		for j, rp := range pb.Permissions {
+			if rp.ResourceType != ResourceTypeTopic && rp.ResourceType != ResourceTypeConsumerGroup {
+				return fmt.Errorf("login.oidc.permissionBindings[%d].permissions[%d]: unsupported resourceType %q, must be %q or %q",
+					i, j, rp.ResourceType, ResourceTypeTopic, ResourceTypeConsumerGroup)
+			}
+			if rp.Pattern == "" {
+				return fmt.Errorf("login.oidc.permissionBindings[%d].permissions[%d]: pattern must not be empty", i, j)
+			}
+			if _, err := regexp.Compile(rp.Pattern); err != nil {
+				return fmt.Errorf("login.oidc.permissionBindings[%d].permissions[%d]: invalid regex pattern %q: %w", i, j, rp.Pattern, err)
+			}
+			if rp.Permission != ResourcePermissionLevelRead &&
+				rp.Permission != ResourcePermissionLevelWrite &&
+				rp.Permission != ResourcePermissionLevelAdmin {
+				return fmt.Errorf("login.oidc.permissionBindings[%d].permissions[%d]: unsupported permission %q, must be %q, %q or %q",
+					i, j, rp.Permission, ResourcePermissionLevelRead, ResourcePermissionLevelWrite, ResourcePermissionLevelAdmin)
+			}
 		}
 	}
 	return nil

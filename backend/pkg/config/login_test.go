@@ -126,3 +126,84 @@ func TestOIDCConfig_SetDefaults(t *testing.T) {
 	assert.Equal(t, "console_session", cfg.SessionCookieName)
 	assert.Equal(t, 86400, cfg.SessionCookieMaxAgeSecs)
 }
+
+func TestOIDCConfig_Validate_PermissionBindingMissingGroups(t *testing.T) {
+	cfg := validOIDCConfig()
+	cfg.PermissionBindings = []PermissionBinding{
+		{Groups: nil, Permissions: []ResourcePermission{
+			{ResourceType: ResourceTypeTopic, Pattern: "a.*", Permission: ResourcePermissionLevelRead},
+		}},
+	}
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "group")
+}
+
+func TestOIDCConfig_Validate_PermissionBindingMissingPermissions(t *testing.T) {
+	cfg := validOIDCConfig()
+	cfg.PermissionBindings = []PermissionBinding{
+		{Groups: []string{"group-a"}, Permissions: nil},
+	}
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "permission")
+}
+
+func TestOIDCConfig_Validate_PermissionBindingInvalidResourceType(t *testing.T) {
+	cfg := validOIDCConfig()
+	cfg.PermissionBindings = []PermissionBinding{
+		{Groups: []string{"group-a"}, Permissions: []ResourcePermission{
+			{ResourceType: "unknownType", Pattern: "a.*", Permission: ResourcePermissionLevelRead},
+		}},
+	}
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "resourceType")
+}
+
+func TestOIDCConfig_Validate_PermissionBindingEmptyPattern(t *testing.T) {
+	cfg := validOIDCConfig()
+	cfg.PermissionBindings = []PermissionBinding{
+		{Groups: []string{"group-a"}, Permissions: []ResourcePermission{
+			{ResourceType: ResourceTypeTopic, Pattern: "", Permission: ResourcePermissionLevelRead},
+		}},
+	}
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pattern")
+}
+
+func TestOIDCConfig_Validate_PermissionBindingInvalidRegex(t *testing.T) {
+	cfg := validOIDCConfig()
+	cfg.PermissionBindings = []PermissionBinding{
+		{Groups: []string{"group-a"}, Permissions: []ResourcePermission{
+			{ResourceType: ResourceTypeTopic, Pattern: "[invalid", Permission: ResourcePermissionLevelRead},
+		}},
+	}
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "regex pattern")
+}
+
+func TestOIDCConfig_Validate_PermissionBindingInvalidPermissionLevel(t *testing.T) {
+	cfg := validOIDCConfig()
+	cfg.PermissionBindings = []PermissionBinding{
+		{Groups: []string{"group-a"}, Permissions: []ResourcePermission{
+			{ResourceType: ResourceTypeTopic, Pattern: "a.*", Permission: "superuser"},
+		}},
+	}
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "permission")
+}
+
+func TestOIDCConfig_Validate_PermissionBindingValid(t *testing.T) {
+	cfg := validOIDCConfig()
+	cfg.PermissionBindings = []PermissionBinding{
+		{Groups: []string{"group-a"}, Permissions: []ResourcePermission{
+			{ResourceType: ResourceTypeTopic, Pattern: `a\..*`, Permission: ResourcePermissionLevelRead},
+			{ResourceType: ResourceTypeConsumerGroup, Pattern: `cg-.*`, Permission: ResourcePermissionLevelWrite},
+		}},
+	}
+	assert.NoError(t, cfg.Validate())
+}

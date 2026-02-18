@@ -15,6 +15,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"regexp"
 	"strings"
 	"time"
 
@@ -39,6 +41,61 @@ type UserIdentity struct {
 	// Role is the Console role derived from the user's groups via
 	// RoleBindings ("admin", "editor", "viewer", or "").
 	Role string
+	// ResourcePermissions contains the fine-grained resource-level permissions
+	// resolved for this user from the configured PermissionBindings.
+	ResourcePermissions []config.ResourcePermission
+}
+
+// permissionOrder maps each permission level to a numeric rank so that
+// higher levels can be compared as covering lower ones.
+var permissionOrder = map[config.ResourcePermissionLevel]int{
+	config.ResourcePermissionLevelRead:  1,
+	config.ResourcePermissionLevelWrite: 2,
+	config.ResourcePermissionLevelAdmin: 3,
+}
+
+// CanAccessResource reports whether the user has at least the required
+// permission level on a resource of the specified type and name.
+//
+// The check uses the user's ResourcePermissions: any entry whose ResourceType
+// matches, whose Pattern (treated as a full-match regex anchored to ^ and $)
+// matches resourceName, and whose Permission level is sufficient causes the
+// method to return true.
+//
+// If the user has no ResourcePermissions configured (ResourcePermissions is
+// empty), true is returned unconditionally to preserve backward-compatible
+// behaviour for deployments that rely solely on the global role.
+func (u *UserIdentity) CanAccessResource(resourceType config.ResourceType, resourceName string, required config.ResourcePermissionLevel) bool {
+	if len(u.ResourcePermissions) == 0 {
+		return true
+	}
+	for _, rp := range u.ResourcePermissions {
+		if rp.ResourceType != resourceType {
+			continue
+		}
+		matched, err := regexp.MatchString("^(?:"+rp.Pattern+")$", resourceName)
+		if err != nil {
+			// Patterns are validated at config load time so this should be
+			// unreachable in practice. Log and skip to aid debugging.
+			slog.Warn("CanAccessResource: skipping invalid regex pattern",
+				slog.String("pattern", rp.Pattern),
+				slog.Any("error", err))
+			continue
+		}
+		if !matched {
+			continue
+		}
+		if permissionCovers(rp.Permission, required) {
+			return true
+		}
+	}
+	return false
+}
+
+// permissionCovers reports whether the granted level is sufficient for the
+// required level.  The order is: read < write < admin.
+func permissionCovers(granted, required config.ResourcePermissionLevel) bool {
+	return permissionOrder[granted] >= permissionOrder[required]
 }
 
 // Service handles OIDC provider discovery, OAuth2 flows, and token validation.
@@ -146,6 +203,9 @@ func (s *Service) VerifyIDToken(ctx context.Context, rawIDToken string) (*UserId
 	// Derive role.
 	identity.Role = s.resolveRole(identity.Groups)
 
+	// Derive resource-level permissions.
+	identity.ResourcePermissions = s.ResolveResourcePermissions(identity.Groups)
+
 	return identity, nil
 }
 
@@ -165,6 +225,50 @@ func (s *Service) resolveRole(groups []string) string {
 		}
 	}
 	return s.cfg.DefaultRole
+}
+
+// ResolveResourcePermissions returns all resource permissions granted to the
+// user based on their group memberships and the configured PermissionBindings.
+// Duplicate permissions (same ResourceType, Pattern, and Permission) are
+// deduplicated.
+func (s *Service) ResolveResourcePermissions(groups []string) []config.ResourcePermission {
+	if len(s.cfg.PermissionBindings) == 0 {
+		return nil
+	}
+
+	groupSet := make(map[string]bool, len(groups))
+	for _, g := range groups {
+		groupSet[g] = true
+	}
+
+	type permKey struct {
+		resourceType config.ResourceType
+		pattern      string
+		permission   config.ResourcePermissionLevel
+	}
+	seen := make(map[permKey]bool)
+	var perms []config.ResourcePermission
+
+	for _, pb := range s.cfg.PermissionBindings {
+		matched := false
+		for _, g := range pb.Groups {
+			if groupSet[g] {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			continue
+		}
+		for _, rp := range pb.Permissions {
+			k := permKey{rp.ResourceType, rp.Pattern, rp.Permission}
+			if !seen[k] {
+				seen[k] = true
+				perms = append(perms, rp)
+			}
+		}
+	}
+	return perms
 }
 
 // IsUserAllowed returns true if the user's groups satisfy the AllowedGroups
