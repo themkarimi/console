@@ -379,6 +379,11 @@ class TopicDetails extends PageComponent<{ topicName: string }> {
           <Flex gap={2} mb={4}>
             <Button
               data-testid="produce-record-button"
+              disabledReason={
+                api.userData?.canProduceMessages === false
+                  ? "You don't have the 'canProduceMessages' permission"
+                  : undefined
+              }
               onClick={() => {
                 appGlobal.historyPush(`/topics/${encodeURIComponent(topic.topicName)}/produce-record`);
               }}

@@ -513,6 +513,9 @@ const apiStore = {
           canDeleteTransforms: r.permissions?.redpanda.includes(RedpandaCapability.MANAGE_TRANSFORMS),
           canViewDebugBundle: r.permissions?.redpanda.includes(RedpandaCapability.MANAGE_DEBUG_BUNDLE),
           canViewConsoleUsers: r.permissions?.redpanda.includes(RedpandaCapability.MANAGE_RBAC),
+          canCreateTopics: r.permissions?.kafkaClusterOperations.includes(KafkaAclOperation.CREATE),
+          canDeleteTopics: r.permissions?.kafkaClusterOperations.includes(KafkaAclOperation.DELETE),
+          canProduceMessages: r.permissions?.kafkaClusterOperations.includes(KafkaAclOperation.WRITE),
         } as UserData;
 
         // Track user in analytics after successful authentication
