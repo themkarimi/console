@@ -44,6 +44,7 @@ type Config struct {
 	SchemaRegistry Schema       `yaml:"schemaRegistry"`
 	Logger         Logging      `yaml:"logger"`
 	Analytics      Analytics    `yaml:"analytics"`
+	Login          Login        `yaml:"login"`
 }
 
 // RegisterFlags for all (sub)configs
@@ -57,6 +58,7 @@ func (c *Config) RegisterFlags(f *flag.FlagSet) {
 	c.Console.RegisterFlags(f)
 	c.KafkaConnect.RegisterFlags(f)
 	c.SchemaRegistry.RegisterFlags(f)
+	c.Login.RegisterFlags(f)
 }
 
 // Validate all root and child config structs
@@ -101,6 +103,11 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("failed to validate Analytics config: %w", err)
 	}
 
+	err = c.Login.Validate()
+	if err != nil {
+		return fmt.Errorf("failed to validate Login config: %w", err)
+	}
+
 	return nil
 }
 
@@ -118,6 +125,7 @@ func (c *Config) SetDefaults() {
 	c.Console.SetDefaults()
 	c.KafkaConnect.SetDefaults()
 	c.Analytics.SetDefaults()
+	c.Login.SetDefaults()
 }
 
 // LoadConfig read YAML-formatted config from filename into cfg.
