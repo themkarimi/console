@@ -31,7 +31,7 @@ import {
   type TransformMetadata,
 } from '../../../protogen/redpanda/api/dataplane/v1/transform_pb';
 import { appGlobal } from '../../../state/app-global';
-import { transformsApi } from '../../../state/backend-api';
+import { api, transformsApi } from '../../../state/backend-api';
 import { uiSettings } from '../../../state/ui';
 import { DefaultSkeleton } from '../../../utils/tsx-utils';
 import { encodeURIComponentPercents } from '../../../utils/utils';
@@ -131,7 +131,16 @@ class TransformsList extends PageComponent {
 
         <Stack direction="row" mb="6">
           <ReactRouterLink to="/transforms-setup">
-            <Button variant="outline">Create transform</Button>
+            <Button
+              disabledReason={
+                api.userData?.canCreateTransforms === false
+                  ? "You don't have the 'canCreateTransforms' permission"
+                  : undefined
+              }
+              variant="outline"
+            >
+              Create transform
+            </Button>
           </ReactRouterLink>
 
           <Button isDisabled variant="outline">
@@ -233,7 +242,7 @@ class TransformsList extends PageComponent {
                           });
                       });
                     }}
-                    // disabledReason={api.userData?.canDeleteTransforms === false ? 'You don\'t have the \'canDeleteTransforms\' permission' : undefined}
+                    disabledReason={api.userData?.canDeleteTransforms === false ? "You don't have the 'canDeleteTransforms' permission" : undefined}
                     variant="icon"
                   >
                     <TrashIcon />

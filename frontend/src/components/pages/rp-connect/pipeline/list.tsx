@@ -31,6 +31,7 @@ import { useKafkaConnectConnectorsQuery } from 'react-query/api/kafka-connect';
 import { useDeletePipelineMutation, useListPipelinesQuery } from 'react-query/api/pipeline';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { api } from 'state/backend-api';
 import { useResetOnboardingWizardStore } from 'state/onboarding-wizard-store';
 import { formatToastErrorMessageGRPC } from 'utils/toast.utils';
 
@@ -251,17 +252,22 @@ const PipelineListPageContent = () => {
 
           return (
             <div className="flex justify-end" data-actions-column>
-              <DeleteResourceAlertDialog
-                buttonIcon={<Trash2 />}
-                buttonText=""
-                buttonVariant="ghost"
-                isDeleting={isDeletingPipeline}
-                onDelete={handleDelete}
-                resourceId={row.original.id}
-                resourceName={row.original.name}
-                resourceType="Pipeline"
-                triggerVariant="button"
-              />
+              {api.userData?.canDeleteTransforms === false ? (
+                <Button disabled icon={<Trash2 />} variant="ghost">
+                </Button>
+              ) : (
+                <DeleteResourceAlertDialog
+                  buttonIcon={<Trash2 />}
+                  buttonText=""
+                  buttonVariant="ghost"
+                  isDeleting={isDeletingPipeline}
+                  onDelete={handleDelete}
+                  resourceId={row.original.id}
+                  resourceName={row.original.name}
+                  resourceType="Pipeline"
+                  triggerVariant="button"
+                />
+              )}
             </div>
           );
         },
@@ -296,7 +302,7 @@ const PipelineListPageContent = () => {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-end gap-4">
-        <Button icon={<Plus />} onClick={handleCreateClick} size="sm">
+        <Button disabled={api.userData?.canCreateTransforms === false} icon={<Plus />} onClick={handleCreateClick} size="sm">
           Create pipeline
         </Button>
       </div>
