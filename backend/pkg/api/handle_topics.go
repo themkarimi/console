@@ -20,6 +20,8 @@ import (
 	"github.com/cloudhut/common/rest"
 	"github.com/twmb/franz-go/pkg/kmsg"
 
+	"github.com/redpanda-data/console/backend/pkg/auth/oidc"
+	"github.com/redpanda-data/console/backend/pkg/config"
 	"github.com/redpanda-data/console/backend/pkg/console"
 )
 
@@ -41,6 +43,20 @@ func (api *API) handleGetTopics() http.HandlerFunc {
 			return
 		}
 
+		// Filter topics to only those the current user has read access to.
+		// When OIDC is not enabled (identity == nil) or the user has no
+		// ResourcePermissions configured (empty permissionBindings), every
+		// call to CanAccessResource returns true so no filtering occurs.
+		if identity := oidc.UserIdentityFromContext(r.Context()); identity != nil {
+			keep := topics[:0]
+			for _, t := range topics {
+				if identity.CanAccessResource(config.ResourceTypeTopic, t.TopicName, config.ResourcePermissionLevelRead) {
+					keep = append(keep, t)
+				}
+			}
+			topics = keep
+		}
+
 		response := response{
 			Topics: topics,
 		}
@@ -58,6 +74,18 @@ func (api *API) handleGetPartitions() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		topicName := rest.GetURLParam(r, "topicName")
 		logger := api.Logger.With(slog.String("topic_name", topicName))
+
+		if identity := oidc.UserIdentityFromContext(r.Context()); identity != nil {
+			if !identity.CanAccessResource(config.ResourceTypeTopic, topicName, config.ResourcePermissionLevelRead) {
+				rest.SendRESTError(w, r, logger, &rest.Error{
+					Err:      fmt.Errorf("not authorized to access topic %q", topicName),
+					Status:   http.StatusForbidden,
+					Message:  fmt.Sprintf("You are not authorized to access topic %q", topicName),
+					IsSilent: false,
+				})
+				return
+			}
+		}
 
 		topicDetails, restErr := api.ConsoleSvc.GetTopicDetails(r.Context(), []string{topicName})
 		if restErr != nil {
@@ -94,6 +122,18 @@ func (api *API) handleGetTopicConfig() http.HandlerFunc {
 		topicName := rest.GetURLParam(r, "topicName")
 		logger := api.Logger.With(slog.String("topic_name", topicName))
 
+		if identity := oidc.UserIdentityFromContext(r.Context()); identity != nil {
+			if !identity.CanAccessResource(config.ResourceTypeTopic, topicName, config.ResourcePermissionLevelRead) {
+				rest.SendRESTError(w, r, logger, &rest.Error{
+					Err:      fmt.Errorf("not authorized to access topic %q", topicName),
+					Status:   http.StatusForbidden,
+					Message:  fmt.Sprintf("You are not authorized to access topic %q", topicName),
+					IsSilent: false,
+				})
+				return
+			}
+		}
+
 		description, restErr := api.ConsoleSvc.GetTopicConfigs(r.Context(), topicName, nil)
 		if restErr != nil {
 			rest.SendRESTError(w, r, logger, restErr)
@@ -114,6 +154,18 @@ func (api *API) handleDeleteTopic() http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		topicName := rest.GetURLParam(r, "topicName")
+
+		if identity := oidc.UserIdentityFromContext(r.Context()); identity != nil {
+			if !identity.CanAccessResource(config.ResourceTypeTopic, topicName, config.ResourcePermissionLevelAdmin) {
+				rest.SendRESTError(w, r, api.Logger, &rest.Error{
+					Err:      fmt.Errorf("not authorized to delete topic %q", topicName),
+					Status:   http.StatusForbidden,
+					Message:  fmt.Sprintf("You are not authorized to delete topic %q", topicName),
+					IsSilent: false,
+				})
+				return
+			}
+		}
 
 		restErr := api.ConsoleSvc.DeleteTopic(r.Context(), topicName)
 		if restErr != nil {
@@ -158,6 +210,18 @@ func (d *deleteTopicRecordsRequest) OK() error {
 func (api *API) handleDeleteTopicRecords() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		topicName := rest.GetURLParam(r, "topicName")
+
+		if identity := oidc.UserIdentityFromContext(r.Context()); identity != nil {
+			if !identity.CanAccessResource(config.ResourceTypeTopic, topicName, config.ResourcePermissionLevelWrite) {
+				rest.SendRESTError(w, r, api.Logger, &rest.Error{
+					Err:      fmt.Errorf("not authorized to delete records from topic %q", topicName),
+					Status:   http.StatusForbidden,
+					Message:  fmt.Sprintf("You are not authorized to delete records from topic %q", topicName),
+					IsSilent: false,
+				})
+				return
+			}
+		}
 
 		// 1. Parse and validate request
 		var req deleteTopicRecordsRequest
@@ -241,6 +305,18 @@ func (api *API) handleEditTopicConfig() http.HandlerFunc {
 			return
 		}
 
+		if identity := oidc.UserIdentityFromContext(r.Context()); identity != nil {
+			if !identity.CanAccessResource(config.ResourceTypeTopic, topicName, config.ResourcePermissionLevelWrite) {
+				rest.SendRESTError(w, r, api.Logger, &rest.Error{
+					Err:      fmt.Errorf("not authorized to edit configuration for topic %q", topicName),
+					Status:   http.StatusForbidden,
+					Message:  fmt.Sprintf("You are not authorized to edit configuration for topic %q", topicName),
+					IsSilent: false,
+				})
+				return
+			}
+		}
+
 		var req editTopicConfigRequest
 		restErr := rest.Decode(w, r, &req)
 		if restErr != nil {
@@ -312,6 +388,17 @@ func (api *API) handleGetTopicsConfigs() http.HandlerFunc {
 			}
 		}
 
+		// Filter topic names to those the user has read access to.
+		if identity := oidc.UserIdentityFromContext(r.Context()); identity != nil {
+			keep := topicNames[:0]
+			for _, name := range topicNames {
+				if identity.CanAccessResource(config.ResourceTypeTopic, name, config.ResourcePermissionLevelRead) {
+					keep = append(keep, name)
+				}
+			}
+			topicNames = keep
+		}
+
 		// 4. Request topics configs and return them
 		descriptions, err := api.ConsoleSvc.GetTopicsConfigs(r.Context(), topicNames, configKeys)
 		if err != nil {
@@ -346,6 +433,18 @@ func (api *API) handleGetTopicConsumers() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		topicName := rest.GetURLParam(r, "topicName")
 		logger := api.Logger.With(slog.String("topic_name", topicName))
+
+		if identity := oidc.UserIdentityFromContext(r.Context()); identity != nil {
+			if !identity.CanAccessResource(config.ResourceTypeTopic, topicName, config.ResourcePermissionLevelRead) {
+				rest.SendRESTError(w, r, logger, &rest.Error{
+					Err:      fmt.Errorf("not authorized to access topic %q", topicName),
+					Status:   http.StatusForbidden,
+					Message:  fmt.Sprintf("You are not authorized to access topic %q", topicName),
+					IsSilent: false,
+				})
+				return
+			}
+		}
 
 		consumers, err := api.ConsoleSvc.ListTopicConsumers(r.Context(), topicName)
 		if err != nil {
@@ -386,6 +485,17 @@ func (api *API) handleGetTopicsOffsets() http.HandlerFunc {
 			return
 		}
 		topicNames := strings.Split(requestedTopicNames, ",")
+
+		// Filter topic names to those the user has read access to.
+		if identity := oidc.UserIdentityFromContext(r.Context()); identity != nil {
+			keep := topicNames[:0]
+			for _, name := range topicNames {
+				if identity.CanAccessResource(config.ResourceTypeTopic, name, config.ResourcePermissionLevelRead) {
+					keep = append(keep, name)
+				}
+			}
+			topicNames = keep
+		}
 
 		timestampStr := rest.GetQueryParam(r, "timestamp")
 		if timestampStr == "" {

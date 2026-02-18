@@ -10,11 +10,14 @@
 package api
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 
 	"github.com/cloudhut/common/rest"
 
+	"github.com/redpanda-data/console/backend/pkg/auth/oidc"
+	"github.com/redpanda-data/console/backend/pkg/config"
 	"github.com/redpanda-data/console/backend/pkg/console"
 )
 
@@ -28,6 +31,18 @@ func (api *API) handleGetTopicDocumentation() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		topicName := rest.GetURLParam(r, "topicName")
 		logger := api.Logger.With(slog.String("topic_name", topicName))
+
+		if identity := oidc.UserIdentityFromContext(r.Context()); identity != nil {
+			if !identity.CanAccessResource(config.ResourceTypeTopic, topicName, config.ResourcePermissionLevelRead) {
+				rest.SendRESTError(w, r, logger, &rest.Error{
+					Err:      fmt.Errorf("not authorized to access topic %q", topicName),
+					Status:   http.StatusForbidden,
+					Message:  fmt.Sprintf("You are not authorized to access topic %q", topicName),
+					IsSilent: false,
+				})
+				return
+			}
+		}
 
 		doc := api.ConsoleSvc.GetTopicDocumentation(topicName)
 
