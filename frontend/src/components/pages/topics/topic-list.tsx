@@ -185,6 +185,11 @@ const TopicList: FC = () => {
             className="min-w-[160px]"
             colorScheme="brand"
             data-testid="create-topic-button"
+            disabledReason={
+              api.userData?.canCreateTopics === false
+                ? "You don't have permission to create topics"
+                : undefined
+            }
             onClick={() => showCreateTopicModal()}
             variant="solid"
           >
@@ -528,8 +533,7 @@ function DeleteDisabledTooltip(props: { topic: Topic; children: JSX.Element }): 
 }
 
 function hasDeletePrivilege() {
-  // TODO - we will provide ACL for this
-  return true;
+  return api.userData?.canDeleteTopics !== false;
 }
 
 // Regex for validating topic names
