@@ -187,7 +187,7 @@ const TopicList: FC = () => {
             data-testid="create-topic-button"
             disabledReason={
               api.userData?.canCreateTopics === false
-                ? "You don't have the 'canCreateTopics' permission"
+                ? "You don't have permission to create topics"
                 : undefined
             }
             onClick={() => showCreateTopicModal()}

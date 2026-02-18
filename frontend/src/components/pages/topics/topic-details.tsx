@@ -381,7 +381,7 @@ class TopicDetails extends PageComponent<{ topicName: string }> {
               data-testid="produce-record-button"
               disabledReason={
                 api.userData?.canProduceMessages === false
-                  ? "You don't have the 'canProduceMessages' permission"
+                  ? "You don't have permission to produce messages"
                   : undefined
               }
               onClick={() => {
