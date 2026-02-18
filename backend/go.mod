@@ -4,6 +4,8 @@ go 1.25.1
 
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.10-20250912141014-52f32327d4b0.1
+	buf.build/gen/go/bufbuild/registry/connectrpc/go v1.19.1-20251027152159-f1066ce064ca.2
+	buf.build/gen/go/bufbuild/registry/protocolbuffers/go v1.36.10-20251027152159-f1066ce064ca.1
 	buf.build/gen/go/redpandadata/common/protocolbuffers/go v1.36.10-20251106193941-bb850a944663.1
 	buf.build/gen/go/redpandadata/core/connectrpc/go v1.19.1-20251111205446-9c61b5cb371f.2
 	buf.build/gen/go/redpandadata/core/protocolbuffers/go v1.36.10-20251111205446-9c61b5cb371f.1
@@ -16,6 +18,7 @@ require (
 	github.com/carlmjohnson/requests v0.25.1
 	github.com/cloudhut/common v0.11.0
 	github.com/cloudhut/connect-client v0.0.0-20240523140316-27c93e339567
+	github.com/coreos/go-oidc/v3 v3.17.0
 	github.com/docker/go-connections v0.6.0
 	github.com/dop251/goja v0.0.0-20251103141225-af2ceb9156d7
 	github.com/fxamacker/cbor/v2 v2.9.0
@@ -64,6 +67,7 @@ require (
 	go.vallahaye.net/connect-gateway v0.11.0
 	golang.org/x/exp v0.0.0-20251113190631-e25ba8c21ef6
 	golang.org/x/net v0.47.0
+	golang.org/x/oauth2 v0.30.0
 	golang.org/x/sync v0.18.0
 	golang.org/x/text v0.31.0
 	google.golang.org/genproto v0.0.0-20251111163417-95abcf5c77ba
@@ -74,8 +78,6 @@ require (
 )
 
 require (
-	buf.build/gen/go/bufbuild/registry/connectrpc/go v1.19.1-20251027152159-f1066ce064ca.2 // indirect
-	buf.build/gen/go/bufbuild/registry/protocolbuffers/go v1.36.10-20251027152159-f1066ce064ca.1 // indirect
 	cel.dev/expr v0.24.0 // indirect
 	cuelang.org/go v0.14.2 // indirect
 	dario.cat/mergo v1.0.2 // indirect
@@ -124,6 +126,7 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
