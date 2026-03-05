@@ -28,6 +28,7 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
+	"github.com/redpanda-data/console/backend/pkg/auth/oidc"
 	"github.com/redpanda-data/console/backend/pkg/config"
 	"github.com/redpanda-data/console/backend/pkg/connect"
 	"github.com/redpanda-data/console/backend/pkg/console"
@@ -53,6 +54,14 @@ type API struct {
 	RedpandaClientProvider redpandafactory.ClientFactory
 	KafkaClientProvider    kafkafactory.ClientFactory
 	SchemaClientProvider   schemafactory.ClientFactory
+
+	// OIDCService handles OIDC provider discovery, token exchange, and
+	// ID-token verification.  It is non-nil only when OIDC is enabled.
+	OIDCService *oidc.Service
+
+	// SessionManager handles reading/writing encrypted session cookies.
+	// It is non-nil only when OIDC is enabled.
+	SessionManager *oidc.SessionManager
 
 	// FrontendResources is an in-memory Filesystem with all go:embedded frontend resources.
 	// The index.html is expected to be at the root of the filesystem. This prop will only be accessed
@@ -145,7 +154,7 @@ func New(cfg *config.Config, inputOpts ...Option) (*API, error) {
 	}
 
 	year := 24 * time.Hour * 365
-	return &API{
+	a := &API{
 		Cfg:                    cfg,
 		Logger:                 logger,
 		ConsoleSvc:             consoleSvc,
@@ -161,7 +170,29 @@ func New(cfg *config.Config, inputOpts ...Option) (*API, error) {
 			Type:      license.TypeOpenSource,
 			ExpiresAt: time.Now().Add(year * 10).Unix(),
 		},
-	}, nil
+	}
+
+	// Initialise OIDC components when authentication is enabled.
+	if cfg.Login.OIDC.Enabled {
+		oidcSvc, err := oidc.NewService(context.Background(), cfg.Login.OIDC)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize OIDC service: %w", err)
+		}
+		a.OIDCService = oidcSvc
+
+		sm, err := oidc.NewSessionManager(
+			cfg.Login.OIDC.SessionCookieName,
+			cfg.Login.OIDC.SessionCookieMaxAgeSecs,
+			cfg.Login.OIDC.CookieEncryptionSecret,
+			cfg.Login.OIDC.SessionCookieSecure,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize session manager: %w", err)
+		}
+		a.SessionManager = sm
+	}
+
+	return a, nil
 }
 
 // Set default client providers if none provided

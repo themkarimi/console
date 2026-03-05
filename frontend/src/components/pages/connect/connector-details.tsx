@@ -120,6 +120,12 @@ const KafkaConnectorMain = observer(
       return null;
     }
 
+    const hasRbacPermission = api.userData?.canCreateTopics !== false;
+    const resolvedCanEdit = Boolean(canEdit) && hasRbacPermission;
+    const canEditTooltipLabel = !hasRbacPermission
+      ? "You don't have permission to perform this action"
+      : "You don't have 'canEditConnectCluster' permissions for this connect cluster";
+
     return (
       <>
         {/* [Pause] [Restart] [Delete] */}
@@ -128,12 +134,12 @@ const KafkaConnectorMain = observer(
           {connectClusterStore.validateConnectorState(connectorName, ['RUNNING', 'PAUSED']) ? (
             <Tooltip
               hasArrow={true}
-              isDisabled={canEdit === true}
-              label={"You don't have 'canEditConnectCluster' permissions for this connect cluster"}
+              isDisabled={resolvedCanEdit}
+              label={canEditTooltipLabel}
               placement="top"
             >
               <Button
-                isDisabled={!canEdit}
+                isDisabled={!resolvedCanEdit}
                 minWidth="32"
                 onClick={() => {
                   $state.pausingConnector = connector;
@@ -148,12 +154,12 @@ const KafkaConnectorMain = observer(
           {/* [Restart] */}
           <Tooltip
             hasArrow={true}
-            isDisabled={canEdit === true}
-            label={"You don't have 'canEditConnectCluster' permissions for this connect cluster"}
+            isDisabled={resolvedCanEdit}
+            label={canEditTooltipLabel}
             placement="top"
           >
             <Button
-              isDisabled={!canEdit}
+              isDisabled={!resolvedCanEdit}
               minWidth="32"
               onClick={() => {
                 $state.restartingConnector = connector;
@@ -167,13 +173,13 @@ const KafkaConnectorMain = observer(
           {/* [Delete] */}
           <Tooltip
             hasArrow={true}
-            isDisabled={canEdit === true}
-            label={"You don't have 'canEditConnectCluster' permissions for this connect cluster"}
+            isDisabled={resolvedCanEdit}
+            label={canEditTooltipLabel}
             placement="top"
           >
             <Button
               colorScheme="red"
-              isDisabled={!canEdit}
+              isDisabled={!resolvedCanEdit}
               minWidth="32"
               onClick={() => {
                 $state.deletingConnector = connectorName;
@@ -216,13 +222,13 @@ const KafkaConnectorMain = observer(
                   <Flex m={4} mb={6}>
                     <Tooltip
                       hasArrow={true}
-                      isDisabled={canEdit === true}
-                      label={"You don't have 'canEditConnectCluster' permissions for this connect cluster"}
+                      isDisabled={resolvedCanEdit}
+                      label={canEditTooltipLabel}
                       placement="top"
                     >
                       <Button
                         isDisabled={(() => {
-                          if (!canEdit) {
+                          if (!resolvedCanEdit) {
                             return true;
                           }
                           if (!connector) {

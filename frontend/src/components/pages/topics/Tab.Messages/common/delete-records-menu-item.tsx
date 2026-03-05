@@ -12,6 +12,7 @@
 import { Button, Tooltip } from '@redpanda-data/ui';
 
 import type { TopicAction } from '../../../../../state/rest-interfaces';
+import { api } from '../../../../../state/backend-api';
 import { getDeleteErrorText, isDeleteEnabled } from '../helpers';
 
 export function DeleteRecordsMenuItem(
@@ -19,8 +20,11 @@ export function DeleteRecordsMenuItem(
   allowedActions: TopicAction[] | undefined,
   onClick: () => void
 ) {
-  const isEnabled = isDeleteEnabled(isCompacted, allowedActions);
-  const errorText = getDeleteErrorText(isCompacted, allowedActions);
+  const hasRbacPermission = api.userData?.canDeleteTopics !== false;
+  const isEnabled = hasRbacPermission && isDeleteEnabled(isCompacted, allowedActions);
+  const errorText = !hasRbacPermission
+    ? "You don't have permission to delete records"
+    : getDeleteErrorText(isCompacted, allowedActions);
 
   let content: JSX.Element | string = 'Delete Records';
   if (errorText) {

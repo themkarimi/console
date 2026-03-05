@@ -20,15 +20,17 @@ import { Skeleton } from 'components/redpanda-ui/components/skeleton';
 import { Spinner } from 'components/redpanda-ui/components/spinner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from 'components/redpanda-ui/components/table';
 import { Tabs, TabsContent, TabsContents, TabsList, TabsTrigger } from 'components/redpanda-ui/components/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from 'components/redpanda-ui/components/tooltip';
 import { Link, Text } from 'components/redpanda-ui/components/typography';
 import { DeleteResourceAlertDialog } from 'components/ui/delete-resource-alert-dialog';
-import { AlertCircle, Trash2 } from 'lucide-react';
+import { AlertCircle, Plus, Trash2 } from 'lucide-react';
 import { DeletePipelineRequestSchema } from 'protogen/redpanda/api/console/v1alpha1/pipeline_pb';
 import type { Pipeline as APIPipeline, Pipeline_State } from 'protogen/redpanda/api/dataplane/v1/pipeline_pb';
 import { useCallback, useMemo, useState } from 'react';
 import { useKafkaConnectConnectorsQuery } from 'react-query/api/kafka-connect';
 import { useDeletePipelineMutation, useListPipelinesQuery } from 'react-query/api/pipeline';
 import { toast } from 'sonner';
+import { api } from 'state/backend-api';
 import { useResetOnboardingWizardStore } from 'state/onboarding-wizard-store';
 import { formatToastErrorMessageGRPC } from 'utils/toast.utils';
 
@@ -187,17 +189,31 @@ const PipelineListPageContent = () => {
 
           return (
             <div className="flex justify-end" data-actions-column>
-              <DeleteResourceAlertDialog
-                buttonIcon={<Trash2 />}
-                buttonText={undefined}
-                buttonVariant="destructive-ghost"
-                isDeleting={isDeletingPipeline}
-                onDelete={handleDelete}
-                resourceId={row.original.id}
-                resourceName={row.original.name}
-                resourceType="Pipeline"
-                triggerVariant="button"
-              />
+              {api.userData?.canDeleteTransforms === false ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Button disabled icon={<Trash2 />} variant="ghost">
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>You don't have the 'canDeleteTransforms' permission</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <DeleteResourceAlertDialog
+                  buttonIcon={<Trash2 />}
+                  buttonText={undefined}
+                  buttonVariant="destructive-ghost"
+                  isDeleting={isDeletingPipeline}
+                  onDelete={handleDelete}
+                  resourceId={row.original.id}
+                  resourceName={row.original.name}
+                  resourceType="Pipeline"
+                  triggerVariant="button"
+                />
+              )}
             </div>
           );
         },
@@ -231,8 +247,21 @@ const PipelineListPageContent = () => {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="mb-4">
-        <Button onClick={handleCreateClick}>Create a pipeline</Button>
+      <div className="flex items-center justify-end gap-4">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button disabled={api.userData?.canCreateTransforms === false} icon={<Plus />} onClick={handleCreateClick} size="sm">
+                  Create pipeline
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {api.userData?.canCreateTransforms === false && (
+              <TooltipContent>You don't have the 'canCreateTransforms' permission</TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
       </div>
       <Table>
         <TableHeader>

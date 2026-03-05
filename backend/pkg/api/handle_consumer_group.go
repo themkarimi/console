@@ -18,6 +18,8 @@ import (
 	"github.com/cloudhut/common/rest"
 	"github.com/twmb/franz-go/pkg/kmsg"
 
+	"github.com/redpanda-data/console/backend/pkg/auth/oidc"
+	"github.com/redpanda-data/console/backend/pkg/config"
 	"github.com/redpanda-data/console/backend/pkg/console"
 )
 
@@ -34,6 +36,17 @@ func (api *API) handleGetConsumerGroups() http.HandlerFunc {
 			return
 		}
 
+		// Filter consumer groups to only those the current user has read access to.
+		if identity := oidc.UserIdentityFromContext(r.Context()); identity != nil {
+			keep := describedGroups[:0]
+			for _, g := range describedGroups {
+				if identity.CanAccessResource(config.ResourceTypeConsumerGroup, g.GroupID, config.ResourcePermissionLevelRead) {
+					keep = append(keep, g)
+				}
+			}
+			describedGroups = keep
+		}
+
 		response := GetConsumerGroupsResponse{
 			ConsumerGroups: describedGroups,
 		}
@@ -47,6 +60,18 @@ func (api *API) handleGetConsumerGroup() http.HandlerFunc {
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		groupID := rest.GetURLParam(r, "groupId")
+
+		if identity := oidc.UserIdentityFromContext(r.Context()); identity != nil {
+			if !identity.CanAccessResource(config.ResourceTypeConsumerGroup, groupID, config.ResourcePermissionLevelRead) {
+				rest.SendRESTError(w, r, api.Logger, &rest.Error{
+					Err:      fmt.Errorf("not authorized to access consumer group %q", groupID),
+					Status:   http.StatusForbidden,
+					Message:  fmt.Sprintf("You are not authorized to access consumer group %q", groupID),
+					IsSilent: false,
+				})
+				return
+			}
+		}
 
 		describedGroups, restErr := api.ConsoleSvc.GetConsumerGroupsOverview(r.Context(), []string{groupID})
 		if restErr != nil {
@@ -107,6 +132,18 @@ func (api *API) handlePatchConsumerGroup() http.HandlerFunc {
 		if restErr != nil {
 			rest.SendRESTError(w, r, api.Logger, restErr)
 			return
+		}
+
+		if identity := oidc.UserIdentityFromContext(r.Context()); identity != nil {
+			if !identity.CanAccessResource(config.ResourceTypeConsumerGroup, req.GroupID, config.ResourcePermissionLevelWrite) {
+				rest.SendRESTError(w, r, api.Logger, &rest.Error{
+					Err:      fmt.Errorf("not authorized to edit offsets for consumer group %q", req.GroupID),
+					Status:   http.StatusForbidden,
+					Message:  fmt.Sprintf("You are not authorized to edit offsets for consumer group %q", req.GroupID),
+					IsSilent: false,
+				})
+				return
+			}
 		}
 
 		// 3. Submit edit offset request
@@ -175,6 +212,18 @@ func (api *API) handleDeleteConsumerGroupOffsets() http.HandlerFunc {
 			return
 		}
 
+		if identity := oidc.UserIdentityFromContext(r.Context()); identity != nil {
+			if !identity.CanAccessResource(config.ResourceTypeConsumerGroup, req.GroupID, config.ResourcePermissionLevelWrite) {
+				rest.SendRESTError(w, r, api.Logger, &rest.Error{
+					Err:      fmt.Errorf("not authorized to delete offsets for consumer group %q", req.GroupID),
+					Status:   http.StatusForbidden,
+					Message:  fmt.Sprintf("You are not authorized to delete offsets for consumer group %q", req.GroupID),
+					IsSilent: false,
+				})
+				return
+			}
+		}
+
 		// 3. Submit delete offset request
 		kmsgReq := make([]kmsg.OffsetDeleteRequestTopic, len(req.Topics))
 		for i, topic := range req.Topics {
@@ -211,6 +260,18 @@ func (api *API) handleDeleteConsumerGroupOffsets() http.HandlerFunc {
 func (api *API) handleDeleteConsumerGroup() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		groupID := rest.GetURLParam(r, "groupId")
+
+		if identity := oidc.UserIdentityFromContext(r.Context()); identity != nil {
+			if !identity.CanAccessResource(config.ResourceTypeConsumerGroup, groupID, config.ResourcePermissionLevelWrite) {
+				rest.SendRESTError(w, r, api.Logger, &rest.Error{
+					Err:      fmt.Errorf("not authorized to delete consumer group %q", groupID),
+					Status:   http.StatusForbidden,
+					Message:  fmt.Sprintf("You are not authorized to delete consumer group %q", groupID),
+					IsSilent: false,
+				})
+				return
+			}
+		}
 
 		// 3. Submit delete offset request
 		err := api.ConsoleSvc.DeleteConsumerGroup(r.Context(), groupID)

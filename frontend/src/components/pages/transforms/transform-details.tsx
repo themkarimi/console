@@ -94,6 +94,7 @@ class TransformDetails extends PageComponent<{ transformName: string }> {
         <Box>
           {/* <Heading as="h2">{transformName}</Heading> */}
           <Button
+            isDisabled={api.userData?.canDeleteTransforms === false}
             mt="2"
             onClick={() =>
               openDeleteModal(transformName, () => {

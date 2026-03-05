@@ -9,20 +9,21 @@
  * by the Apache License, Version 2.0
  */
 
-import { Box, Button, ColorModeSwitch, CopyButton, Flex } from '@redpanda-data/ui';
+import { Avatar, Box, Button, ColorModeSwitch, CopyButton, Flex, Popover, PopoverBody, PopoverContent, PopoverHeader, PopoverTrigger, Text } from '@redpanda-data/ui';
 import { Link, useLocation, useMatchRoute } from '@tanstack/react-router';
 import { Heading } from 'components/redpanda-ui/components/typography';
 import { cn } from 'components/redpanda-ui/lib/utils';
 import { computed } from 'mobx';
 import { observer } from 'mobx-react';
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 
+import { AuthenticationMethod } from '../../protogen/redpanda/api/console/v1alpha1/authentication_pb';
 import { isEmbedded } from '../../config';
 import { api } from '../../state/backend-api';
 import { type BreadcrumbEntry, uiState } from '../../state/ui-state';
 import { IsDev } from '../../utils/env';
 import DataRefreshButton from '../misc/buttons/data-refresh/component';
-import { UserPreferencesButton } from '../misc/user-preferences';
+import { UserPreferencesButton, UserPreferencesDialog } from '../misc/user-preferences';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -134,7 +135,7 @@ const AppPageHeader = observer(() => {
               </Button>
             </Link>
           )}
-          <UserPreferencesButton />
+          <UserMenu />
           {IsDev && !isEmbedded() && <ColorModeSwitch m={0} p={0} variant="ghost" />}
         </Flex>
       </Flex>
@@ -143,6 +144,67 @@ const AppPageHeader = observer(() => {
 });
 
 export default AppPageHeader;
+
+const UserMenu = observer(() => {
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
+
+  const userData = api.userData;
+
+  if (
+    !userData ||
+    !userData.displayName ||
+    userData.authenticationMethod === AuthenticationMethod.NONE ||
+    userData.authenticationMethod === AuthenticationMethod.UNSPECIFIED
+  ) {
+    return <UserPreferencesButton />;
+  }
+
+  return (
+    <>
+      <Popover placement="bottom-end" trigger="click">
+        <PopoverTrigger>
+          <Button data-testid="user-menu" variant="ghost">
+            <Avatar name={userData.displayName} size="xs" src={userData.avatarUrl} />
+            <Text as="span" fontSize="sm" ml={2}>
+              {userData.displayName}
+            </Text>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent>
+          <PopoverHeader>
+            Signed in as <strong>{userData.displayName}</strong>
+          </PopoverHeader>
+          <PopoverBody>
+            <Button
+              justifyContent="start"
+              onClick={() => {
+                setPreferencesOpen(true);
+              }}
+              variant="ghost"
+              w="full"
+            >
+              Preferences
+            </Button>
+            <Button
+              data-testid="user-menu-logout"
+              justifyContent="start"
+              onClick={async () => {
+                await api.logout();
+                window.location.reload();
+              }}
+              variant="ghost"
+              w="full"
+            >
+              Logout
+            </Button>
+          </PopoverBody>
+        </PopoverContent>
+      </Popover>
+
+      <UserPreferencesDialog isOpen={preferencesOpen} onClose={() => setPreferencesOpen(false)} />
+    </>
+  );
+});
 
 /**
  * Custom React Hook: Determines whether to show the refresh button based on route matches.

@@ -11,10 +11,14 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/cloudhut/common/rest"
 	"github.com/twmb/franz-go/pkg/kmsg"
+
+	"github.com/redpanda-data/console/backend/pkg/auth/oidc"
+	"github.com/redpanda-data/console/backend/pkg/config"
 )
 
 // createTopicRequest defines the expected JSON body to create a topic.
@@ -97,6 +101,18 @@ func (api *API) handleCreateTopic() http.HandlerFunc {
 		if restErr != nil {
 			rest.SendRESTError(w, r, api.Logger, restErr)
 			return
+		}
+
+		if identity := oidc.UserIdentityFromContext(r.Context()); identity != nil {
+			if !identity.CanAccessResource(config.ResourceTypeTopic, req.TopicName, config.ResourcePermissionLevelWrite) {
+				rest.SendRESTError(w, r, api.Logger, &rest.Error{
+					Err:      fmt.Errorf("not authorized to create topic %q", req.TopicName),
+					Status:   http.StatusForbidden,
+					Message:  fmt.Sprintf("You are not authorized to create topic %q", req.TopicName),
+					IsSilent: false,
+				})
+				return
+			}
 		}
 
 		// 3. Try to create topic
