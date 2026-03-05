@@ -9,7 +9,7 @@
  * by the Apache License, Version 2.0
  */
 
-import { Box, Button, DataTable, Text } from '@redpanda-data/ui';
+import { Box, Button, DataTable, Text, Tooltip } from '@redpanda-data/ui';
 import { Link } from '@tanstack/react-router';
 import { makeObservable, observable } from 'mobx';
 import { observer } from 'mobx-react';
@@ -88,9 +88,26 @@ class KafkaClusterDetails extends PageComponent<{ clusterName: string }> {
           {/* Connectors List */}
           <div>
             <div style={{ display: 'flex', marginBottom: '.5em' }}>
-              <Link params={{ clusterName }} to="/connect-clusters/$clusterName/create-connector">
-                <Button variant="solid">Create connector</Button>
-              </Link>
+              <Tooltip
+                hasArrow={true}
+                isDisabled={cluster?.canEditCluster !== false && api.userData?.canCreateTopics !== false}
+                label={
+                  api.userData?.canCreateTopics === false
+                    ? "You don't have permission to create connectors"
+                    : "You don't have 'editConnectCluster' permissions for this connect cluster"
+                }
+                placement="top"
+              >
+                {cluster?.canEditCluster === false || api.userData?.canCreateTopics === false ? (
+                  <Button isDisabled variant="solid">
+                    Create connector
+                  </Button>
+                ) : (
+                  <Link params={{ clusterName }} to="/connect-clusters/$clusterName/create-connector">
+                    <Button variant="solid">Create connector</Button>
+                  </Link>
+                )}
+              </Tooltip>
             </div>
 
             <Box my={5}>

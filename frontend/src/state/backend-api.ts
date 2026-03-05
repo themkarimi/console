@@ -247,8 +247,10 @@ async function handle401(res: Response) {
 
     const err = obj as ApiError;
     uiState.loginError = String(err.message);
-  } catch (err) {
-    uiState.loginError = String(err);
+  } catch {
+    // Response body is not valid JSON (e.g. plain text "unauthorized: no valid session")
+    // This is expected when the user is simply not authenticated; don't surface a
+    // raw JSON parse error to the user.
   }
 
   // Save current location url
@@ -542,6 +544,10 @@ const apiStore = {
           canDeleteTransforms: r.permissions?.redpanda.includes(RedpandaCapability.MANAGE_TRANSFORMS),
           canViewDebugBundle: r.permissions?.redpanda.includes(RedpandaCapability.MANAGE_DEBUG_BUNDLE),
           canViewConsoleUsers: r.permissions?.redpanda.includes(RedpandaCapability.MANAGE_RBAC),
+          canCreateTopics: r.permissions?.kafkaClusterOperations.includes(KafkaAclOperation.CREATE),
+          canDeleteTopics: r.permissions?.kafkaClusterOperations.includes(KafkaAclOperation.DELETE),
+          canProduceMessages: r.permissions?.kafkaClusterOperations.includes(KafkaAclOperation.WRITE),
+          canCreateAcls: r.permissions?.kafkaClusterOperations.includes(KafkaAclOperation.ALTER),
         } as UserData;
 
         // Track user in analytics after successful authentication

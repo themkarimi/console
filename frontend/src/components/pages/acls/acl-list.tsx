@@ -782,28 +782,36 @@ const AclsTab = (_: { principalGroups: AclPrincipalGroup[] }) => {
 
         <AlertDeleteFailed aclFailed={aclFailed} onClose={() => setAclFailed(null)} />
 
-        <Button
-          data-testid="create-acls"
-          onClick={() => {
-            navigate({
-              to: '/security/acls/create',
-              search: { principalType: undefined, principalName: undefined },
-            });
-            setEditorType('create');
-            setEdittingPrincipalGroup({
-              host: '',
-              principalType: 'User',
-              principalName: '',
-              topicAcls: [createEmptyTopicAcl()],
-              consumerGroupAcls: [createEmptyConsumerGroupAcl()],
-              transactionalIdAcls: [createEmptyTransactionalIdAcl()],
-              clusterAcls: createEmptyClusterAcl(),
-              sourceEntries: [],
-            });
-          }}
+        <Tooltip
+          hasArrow
+          isDisabled={api.userData?.canCreateAcls !== false}
+          label="You don't have permission to create ACLs"
+          placement="top"
         >
-          Create ACLs
-        </Button>
+          <Button
+            data-testid="create-acls"
+            isDisabled={api.userData?.canCreateAcls === false}
+            onClick={() => {
+              navigate({
+                to: '/security/acls/create',
+                search: { principalType: undefined, principalName: undefined },
+              });
+              setEditorType('create');
+              setEdittingPrincipalGroup({
+                host: '',
+                principalType: 'User',
+                principalName: '',
+                topicAcls: [createEmptyTopicAcl()],
+                consumerGroupAcls: [createEmptyConsumerGroupAcl()],
+                transactionalIdAcls: [createEmptyTransactionalIdAcl()],
+                clusterAcls: createEmptyClusterAcl(),
+                sourceEntries: [],
+              });
+            }}
+          >
+            Create ACLs
+          </Button>
+        </Tooltip>
 
         <Box py={4}>
           <DataTable<{

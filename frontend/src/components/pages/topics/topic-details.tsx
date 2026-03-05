@@ -377,15 +377,23 @@ class TopicDetails extends PageComponent<{ topicName: string }> {
           {Boolean(uiSettings.topicDetailsShowStatisticsBar) && <TopicQuickInfoStatistic topic={topic} />}
 
           <Flex gap={2} mb={4}>
-            <Button
-              data-testid="produce-record-button"
-              onClick={() => {
-                appGlobal.historyPush(`/topics/${encodeURIComponent(topic.topicName)}/produce-record`);
-              }}
-              variant="outline"
+            <Tooltip
+              hasArrow
+              isDisabled={api.userData?.canProduceMessages !== false}
+              label="You don't have permission to produce messages"
+              placement="top"
             >
-              Produce Record
-            </Button>
+              <Button
+                data-testid="produce-record-button"
+                isDisabled={api.userData?.canProduceMessages === false}
+                onClick={() => {
+                  appGlobal.historyPush(`/topics/${encodeURIComponent(topic.topicName)}/produce-record`);
+                }}
+                variant="outline"
+              >
+                Produce Record
+              </Button>
+            </Tooltip>
             {DeleteRecordsMenuItem(topic.cleanupPolicy === 'compact', topic.allowedActions, () => {
               this.deleteRecordsModalAlive = true;
             })}
