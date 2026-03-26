@@ -129,12 +129,12 @@ const KafkaConnectorMain = ({
         {connectClusterStore.validateConnectorState(connectorName, ['RUNNING', 'PAUSED']) ? (
           <Tooltip
             hasArrow={true}
-            isDisabled={canEdit === true}
-            label={"You don't have 'canEditConnectCluster' permissions for this connect cluster"}
+            isDisabled={resolvedCanEdit}
+            label={canEditTooltipLabel}
             placement="top"
           >
             <Button
-              isDisabled={!canEdit}
+              isDisabled={!resolvedCanEdit}
               minWidth="32"
               onClick={() => {
                 setS({ pausingConnector: connector });

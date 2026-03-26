@@ -571,6 +571,12 @@ export type UserData = {
   canListTransforms: boolean;
   canCreateTransforms: boolean;
   canDeleteTransforms: boolean;
+
+  canCreateTopics: boolean;
+  canDeleteTopics: boolean;
+  canProduceMessages: boolean;
+
+  canCreateAcls: boolean;
 };
 export type UserPermissions = Exclude<keyof UserData, 'user' | 'seat'>;
 

@@ -19,6 +19,7 @@ import {
   SearchField,
   Stack,
   Text,
+  Tooltip,
 } from '@redpanda-data/ui';
 import { Link } from '@tanstack/react-router';
 import { CheckIcon, CloseIcon, TrashIcon } from 'components/icons';

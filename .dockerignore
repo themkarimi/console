@@ -1,0 +1,21 @@
+.git
+*.md
+
+# Frontend build artifacts and heavy dirs
+frontend/node_modules
+frontend/build
+frontend/.cache
+frontend/dist
+
+# Backend build artifacts
+backend/vendor
+
+# Test artifacts
+frontend/playwright-report
+frontend/test-results
+
+# Editor and OS files
+.DS_Store
+*.swp
+*.idea
+.vscode

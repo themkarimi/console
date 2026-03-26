@@ -761,17 +761,25 @@ const AclsTab = (_: { principalGroups: AclPrincipalGroup[] }) => {
       <Section>
         <AlertDeleteFailed aclFailed={aclFailed} onClose={() => setAclFailed(null)} />
 
-        <Button
-          data-testid="create-acls"
-          onClick={() => {
-            navigate({
-              to: '/security/acls/create',
-              search: { principalType: undefined, principalName: undefined },
-            });
-          }}
+        <Tooltip
+          hasArrow
+          isDisabled={api.userData?.canCreateAcls !== false}
+          label="You don't have permission to create ACLs"
+          placement="top"
         >
-          Create ACLs
-        </Button>
+          <Button
+            data-testid="create-acls"
+            isDisabled={api.userData?.canCreateAcls === false}
+            onClick={() => {
+              navigate({
+                to: '/security/acls/create',
+                search: { principalType: undefined, principalName: undefined },
+              });
+            }}
+          >
+            Create ACLs
+          </Button>
+        </Tooltip>
 
         <Box py={4}>
           <DataTable<{
