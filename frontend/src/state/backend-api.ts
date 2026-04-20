@@ -239,24 +239,6 @@ async function handle401(res: Response) {
   //   Any old/invalid JWT will be cleared by the server
   api.userData = null;
 
-  try {
-    const text = await res.text();
-    const obj = JSON.parse(text);
-    // biome-ignore lint/suspicious/noConsole: intentional console usage
-    console.log(`unauthorized message: ${text}`);
-
-    const err = obj as ApiError;
-    uiState.loginError = String(err.message);
-  } catch {
-    // Response body is not valid JSON (e.g. plain text "unauthorized: no valid session")
-    // This is expected when the user is simply not authenticated; don't surface a
-    // raw JSON parse error to the user.
-  }
-
-  // Save current location url
-  // store.urlBeforeLogin = window.location.href;
-  // get current path
-
   // Check if we're in embedded mode using multiple signals to handle V1 Module Federation race conditions
   // where JWT might not be set yet when this function is called
   const inEmbeddedContext =
@@ -271,11 +253,29 @@ async function handle401(res: Response) {
       })
     );
     // Don't redirect - let the request fail gracefully and allow the host to handle auth
-    return;
+  } else {
+    // Navigate to login immediately — before any async work — so that the MobX
+    // observer in RequireAuth sees the updated location when it re-renders due to
+    // userData becoming null. Without this, the observer fires during the async gap
+    // below and triggers a hard page reload via window.location.pathname instead of
+    // a clean SPA navigation.
+    appGlobal.historyPush('/login');
   }
 
-  // Non-embedded mode: redirect to login
-  appGlobal.historyPush('/login');
+  // Parse the error body in the background (non-blocking after navigation).
+  try {
+    const text = await res.text();
+    const obj = JSON.parse(text);
+    // biome-ignore lint/suspicious/noConsole: intentional console usage
+    console.log(`unauthorized message: ${text}`);
+
+    const err = obj as ApiError;
+    uiState.loginError = String(err.message);
+  } catch {
+    // Response body is not valid JSON (e.g. plain text "unauthorized: no valid session")
+    // This is expected when the user is simply not authenticated; don't surface a
+    // raw JSON parse error to the user.
+  }
 }
 
 function processVersionInfo(headers: Headers) {

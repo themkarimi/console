@@ -14,6 +14,7 @@ import type { ReactNode } from 'react';
 
 import { ConnectionErrorUI } from './misc/connection-error-ui';
 import { config as appConfig } from '../config';
+import { appGlobal } from '../state/app-global';
 import { api } from '../state/backend-api';
 import { featureErrors } from '../state/supported-features';
 import { uiState } from '../state/ui-state';
@@ -38,8 +39,11 @@ function loginHandling(): JSX.Element | null {
   }
 
   if (api.userData === null && !path.startsWith('/login')) {
-    devPrint('known not logged in, hard redirect');
-    window.location.pathname = `${getBasePath()}/login`; // definitely not logged in, and in wrong url: hard redirect!
+    devPrint('known not logged in, redirecting to login');
+    // Use SPA navigation instead of a hard page reload. A hard reload here races
+    // with the historyPush already issued by handle401/refreshUserData, causing
+    // the browser to reload the page repeatedly before landing on the login page.
+    appGlobal.historyPush('/login');
     return preLogin;
   }
 
