@@ -10,7 +10,7 @@
  */
 
 import { Avatar, Box, Button, ColorModeSwitch, CopyButton, Flex, Popover, PopoverBody, PopoverContent, PopoverHeader, PopoverTrigger, Text } from '@redpanda-data/ui';
-import { Link, useLocation, useMatchRoute } from '@tanstack/react-router';
+import { Link, useLocation, useMatchRoute, useNavigate } from '@tanstack/react-router';
 import { Heading } from 'components/redpanda-ui/components/typography';
 import { cn } from 'components/redpanda-ui/lib/utils';
 import { computed } from 'mobx';
@@ -147,6 +147,7 @@ export default AppPageHeader;
 
 const UserMenu = observer(() => {
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const navigate = useNavigate();
 
   const userData = api.userData;
 
@@ -190,7 +191,7 @@ const UserMenu = observer(() => {
               justifyContent="start"
               onClick={async () => {
                 await api.logout();
-                window.location.reload();
+                void navigate({ to: '/login' });
               }}
               variant="ghost"
               w="full"

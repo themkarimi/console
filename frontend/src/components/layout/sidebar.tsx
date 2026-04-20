@@ -9,7 +9,7 @@
  * by the Apache License, Version 2.0
  */
 
-import { Link, useLocation } from '@tanstack/react-router';
+import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import { Avatar, AvatarFallback, AvatarImage } from 'components/redpanda-ui/components/avatar';
 import {
   DropdownMenu,
@@ -84,6 +84,7 @@ function SidebarCollapseToggle() {
 const UserProfile = observer(() => {
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const { state, isMobile, setOpenMobile } = useSidebar();
+  const navigate = useNavigate();
 
   useEffect(() => {
     api.refreshUserData().catch(() => {
@@ -166,7 +167,7 @@ const UserProfile = observer(() => {
             onClick={async () => {
               handleMenuItemClick();
               await api.logout();
-              window.location.reload();
+              void navigate({ to: '/login' });
             }}
           >
             <LogOut aria-hidden="true" className="mr-2 h-4 w-4" />
