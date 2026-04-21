@@ -10,7 +10,7 @@
  */
 
 import { Avatar, Box, Button, ColorModeSwitch, CopyButton, Flex, Popover, PopoverBody, PopoverContent, PopoverHeader, PopoverTrigger, Text } from '@redpanda-data/ui';
-import { Link, useLocation, useMatchRoute, useNavigate } from '@tanstack/react-router';
+import { Link, useLocation, useMatchRoute } from '@tanstack/react-router';
 import { Heading } from 'components/redpanda-ui/components/typography';
 import { cn } from 'components/redpanda-ui/lib/utils';
 import { computed } from 'mobx';
@@ -21,7 +21,7 @@ import { AuthenticationMethod } from '../../protogen/redpanda/api/console/v1alph
 import { isEmbedded } from '../../config';
 import { api } from '../../state/backend-api';
 import { type BreadcrumbEntry, uiState } from '../../state/ui-state';
-import { IsDev } from '../../utils/env';
+import { IsDev, getBasePath } from '../../utils/env';
 import DataRefreshButton from '../misc/buttons/data-refresh/component';
 import { UserPreferencesButton, UserPreferencesDialog } from '../misc/user-preferences';
 import {
@@ -147,7 +147,6 @@ export default AppPageHeader;
 
 const UserMenu = observer(() => {
   const [preferencesOpen, setPreferencesOpen] = useState(false);
-  const navigate = useNavigate();
 
   const userData = api.userData;
 
@@ -191,7 +190,11 @@ const UserMenu = observer(() => {
               justifyContent="start"
               onClick={async () => {
                 await api.logout();
-                void navigate({ to: '/login' });
+                // Hard-navigate to the login URL (not reload of the current
+                // page) so the app boots cleanly with no stale in-memory state
+                // and no SPA race between MobX observers, RequireAuth and the
+                // router during the auth transition.
+                window.location.assign(`${getBasePath() || ''}/login`);
               }}
               variant="ghost"
               w="full"

@@ -9,7 +9,7 @@
  * by the Apache License, Version 2.0
  */
 
-import { Link, useLocation, useNavigate } from '@tanstack/react-router';
+import { Link, useLocation } from '@tanstack/react-router';
 import { Avatar, AvatarFallback, AvatarImage } from 'components/redpanda-ui/components/avatar';
 import {
   DropdownMenu,
@@ -43,7 +43,7 @@ import RedpandaIcon from '../../assets/redpanda/redpanda-icon-next.svg';
 import RedpandaLogoWhite from '../../assets/redpanda/redpanda-logo-next-white.svg';
 import { AuthenticationMethod } from '../../protogen/redpanda/api/console/v1alpha1/authentication_pb';
 import { api } from '../../state/backend-api';
-import { AppFeatures } from '../../utils/env';
+import { AppFeatures, getBasePath } from '../../utils/env';
 import { getUserInitials } from '../../utils/string';
 import { UserPreferencesDialog } from '../misc/user-preferences';
 import { Text } from '../redpanda-ui/components/typography';
@@ -84,7 +84,6 @@ function SidebarCollapseToggle() {
 const UserProfile = observer(() => {
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const { state, isMobile, setOpenMobile } = useSidebar();
-  const navigate = useNavigate();
 
   useEffect(() => {
     api.refreshUserData().catch(() => {
@@ -167,7 +166,11 @@ const UserProfile = observer(() => {
             onClick={async () => {
               handleMenuItemClick();
               await api.logout();
-              void navigate({ to: '/login' });
+              // Hard-navigate to the login URL (not reload of the current
+              // page) so the app boots cleanly with no stale in-memory state
+              // and no SPA race between MobX observers, RequireAuth and the
+              // router during the auth transition.
+              window.location.assign(`${getBasePath() || ''}/login`);
             }}
           >
             <LogOut aria-hidden="true" className="mr-2 h-4 w-4" />
