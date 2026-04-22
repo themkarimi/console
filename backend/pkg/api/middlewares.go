@@ -133,6 +133,10 @@ func auditLogMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 				slog.String("status", strconv.Itoa(ww.statusCode)),
 			}
 
+			if rt := resourceTypeFromPath(r.URL.Path); rt != "" {
+				attrs = append(attrs, slog.String("resource_type", rt))
+			}
+
 			if rctx := chi.RouteContext(r.Context()); rctx != nil {
 				for i, key := range rctx.URLParams.Keys {
 					if key == "*" || i >= len(rctx.URLParams.Values) {
@@ -166,6 +170,28 @@ type statusRecorder struct {
 func (sr *statusRecorder) WriteHeader(code int) {
 	sr.statusCode = code
 	sr.ResponseWriter.WriteHeader(code)
+}
+
+// resourceTypeFromPath extracts the resource type from a REST URL path.
+// It takes the first path segment after "/api/" and singularizes simple names
+// (e.g. "/api/topics/foo" → "topic", "/api/kafka-connect/..." → "kafka-connect").
+func resourceTypeFromPath(path string) string {
+	const prefix = "/api/"
+	if !strings.HasPrefix(path, prefix) {
+		return ""
+	}
+	p := path[len(prefix):]
+	if i := strings.Index(p, "/"); i >= 0 {
+		p = p[:i]
+	}
+	if p == "" {
+		return ""
+	}
+	// Singularize simple (non-hyphenated) plural names.
+	if !strings.Contains(p, "-") {
+		p = strings.TrimSuffix(p, "s")
+	}
+	return p
 }
 
 // actionFromMethod maps an HTTP method to an uppercase audit action label.

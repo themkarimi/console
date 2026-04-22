@@ -24,6 +24,10 @@ class AppGlobal {
   private _location: ParsedLocation | null = null;
   // biome-ignore lint/suspicious/noExplicitAny: Router type is complex and varies based on route tree
   private _router: Router<any, any, any> | null = null;
+  // Tracks the path of an in-flight navigation so duplicate historyPush calls
+  // (e.g. multiple concurrent 401 responses) don't cancel and restart the same
+  // TanStack Router async navigation in a loop.
+  private _pendingNavigationPath: string | null = null;
 
   /**
    * Normalizes a path by removing trailing slashes for consistent comparison.
@@ -42,6 +46,16 @@ class AppGlobal {
     if (this.normalizePath(this._location?.pathname) === this.normalizePath(path)) {
       return;
     }
+    // Skip if a navigation to the same path is already in-flight.
+    // TanStack Router's navigate() is async: window.location.pathname only
+    // updates after route loading completes.  Without this guard, MobX observer
+    // re-renders that fire while navigation is pending (e.g. multiple concurrent
+    // 401 responses all calling historyPush('/login')) each cancel the pending
+    // navigation and restart it, producing an infinite reload loop.
+    if (this._pendingNavigationPath !== null && this.normalizePath(this._pendingNavigationPath) === this.normalizePath(path)) {
+      return;
+    }
+    this._pendingNavigationPath = path;
     uiState.pathName = path;
     api.errors = [];
     this._navigate?.(path);
@@ -52,6 +66,10 @@ class AppGlobal {
     if (this.normalizePath(this._location?.pathname) === this.normalizePath(path)) {
       return;
     }
+    if (this._pendingNavigationPath !== null && this.normalizePath(this._pendingNavigationPath) === this.normalizePath(path)) {
+      return;
+    }
+    this._pendingNavigationPath = path;
     uiState.pathName = path;
     api.errors = [];
     this._navigate?.(path, { replace: true });
@@ -81,6 +99,9 @@ class AppGlobal {
       return;
     }
     this._location = location;
+    // Navigation committed — clear the pending path guard so future navigations
+    // to the same route (e.g. re-login after a new session) are not blocked.
+    this._pendingNavigationPath = null;
   }
 
   get location(): ParsedLocation {

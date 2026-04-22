@@ -63,6 +63,10 @@ func (in *AuditLogInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFu
 			slog.String("status", status),
 		}
 
+		if rt := resourceTypeFromProcedure(procedure); rt != "" {
+			attrs = append(attrs, slog.String("resource_type", rt))
+		}
+
 		if resource != "" {
 			attrs = append(attrs, slog.String("resource_name", resource))
 		}
@@ -137,6 +141,26 @@ func actionFromProcedure(procedure string) string {
 		}
 	}
 	return "UNKNOWN"
+}
+
+// resourceTypeFromProcedure extracts the resource type from a fully-qualified procedure
+// name (e.g. "/redpanda.api.dataplane.v1.TopicService/CreateTopic" → "topic").
+// Returns an empty string when the service name cannot be determined.
+func resourceTypeFromProcedure(procedure string) string {
+	// Service part is everything before the last "/"
+	if i := strings.LastIndex(procedure, "/"); i <= 0 {
+		return ""
+	} else {
+		procedure = procedure[:i]
+	}
+	// Take the last dot-separated component (the simple service name)
+	if i := strings.LastIndex(procedure, "."); i >= 0 {
+		procedure = procedure[i+1:]
+	}
+	if !strings.HasSuffix(procedure, "Service") {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSuffix(procedure, "Service"))
 }
 
 // resourceNameFromRequest tries to extract a human-readable resource identifier
