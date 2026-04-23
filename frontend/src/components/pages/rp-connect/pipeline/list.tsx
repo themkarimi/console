@@ -41,6 +41,7 @@ import { StatusBadge, type StatusBadgeVariant } from 'components/redpanda-ui/com
 import { StatusDot } from 'components/redpanda-ui/components/status-dot';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from 'components/redpanda-ui/components/table';
 import { Tabs, TabsContent, TabsContents, TabsList, TabsTrigger } from 'components/redpanda-ui/components/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from 'components/redpanda-ui/components/tooltip';
 import { Link, List, ListItem, Text } from 'components/redpanda-ui/components/typography';
 import { createFilterFn } from 'components/redpanda-ui/lib/filter-utils';
 import { useDataTableFilter } from 'components/redpanda-ui/lib/use-data-table-filter';
@@ -48,7 +49,7 @@ import { cn } from 'components/redpanda-ui/lib/utils';
 import { DeleteResourceAlertDialog } from 'components/ui/delete-resource-alert-dialog';
 import { PIPELINE_STATE_OPTIONS, STARTABLE_STATES, STOPPABLE_STATES } from 'components/ui/pipeline/constants';
 import { isEmbedded, isFeatureFlagEnabled } from 'config';
-import { AlertCircle, MoreHorizontal } from 'lucide-react';
+import { AlertCircle, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import {
   DeletePipelineRequestSchema,
   StartPipelineRequestSchema,
@@ -64,6 +65,7 @@ import {
   useStopPipelineMutation,
 } from 'react-query/api/pipeline';
 import { toast } from 'sonner';
+import { api } from 'state/backend-api';
 import { useResetOnboardingWizardStore } from 'state/onboarding-wizard-store';
 import { formatToastErrorMessageGRPC } from 'utils/toast.utils';
 
@@ -638,7 +640,20 @@ const PipelineListPageContent = () => {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4">
         <DataTableFilter actions={actions} columns={filterColumns} filters={filters} table={table} />
-        <Button onClick={handleCreateClick}>Create a pipeline</Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button disabled={api.userData?.canCreateTransforms === false} icon={<Plus />} onClick={handleCreateClick} size="sm">
+                  Create pipeline
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {api.userData?.canCreateTransforms === false && (
+              <TooltipContent>You don't have the 'canCreateTransforms' permission</TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
       </div>
       <Table>
         <TableHeader>

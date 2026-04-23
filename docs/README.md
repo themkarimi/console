@@ -17,5 +17,6 @@ If there are still open questions after reading this documentation don't hesitat
     - [Kafka Connect](./features/kafka-connect.md)
     - [Topic Documentation](./features/topic-documentation.md)
     - [Protobuf](./features/protobuf.md)
+    - [OIDC Authentication & Authorization](./features/authentication.md)
 - Reference Config
     - [console.yaml](./config/console.yaml)

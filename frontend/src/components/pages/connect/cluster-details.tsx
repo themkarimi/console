@@ -9,7 +9,7 @@
  * by the Apache License, Version 2.0
  */
 
-import { Box, Button, DataTable, Text } from '@redpanda-data/ui';
+import { Box, Button, DataTable, Text, Tooltip } from '@redpanda-data/ui';
 import { Link } from '@tanstack/react-router';
 import { useCallback, useState } from 'react';
 
@@ -17,7 +17,7 @@ import { ClusterStatisticsCard, ConnectorClass, NotConfigured, TaskState, TasksC
 import { isEmbedded } from '../../../config';
 import { appGlobal } from '../../../state/app-global';
 import { api } from '../../../state/backend-api';
-import type { ClusterAdditionalInfo, ClusterConnectorInfo } from '../../../state/rest-interfaces';
+import type { ClusterAdditionalInfo, ClusterConnectorInfo, ClusterConnectors } from '../../../state/rest-interfaces';
 import { uiSettings } from '../../../state/ui';
 import { DefaultSkeleton } from '../../../utils/tsx-utils';
 import PageContent from '../../misc/page-content';
@@ -71,7 +71,7 @@ class KafkaClusterDetails extends PageComponent<{ clusterName: string }> {
         {/* Main Card */}
         <Section>
           {/* Connectors List */}
-          <ConnectorsList clusterName={clusterName} connectors={connectors ?? []} />
+          <ConnectorsList clusterName={clusterName} connectors={connectors ?? []} cluster={cluster} />
 
           {/* Plugin List */}
           <div style={{ marginTop: '2em', display: isEmbedded() ? 'none' : 'block' }}>
@@ -106,9 +106,16 @@ class KafkaClusterDetails extends PageComponent<{ clusterName: string }> {
   }
 }
 
-const ConnectorsList = ({ clusterName, connectors }: { clusterName: string; connectors: ClusterConnectorInfo[] }) => {
+const ConnectorsList = ({ clusterName, connectors, cluster }: { clusterName: string; connectors: ClusterConnectorInfo[]; cluster?: ClusterConnectors }) => {
   const [filteredResults, setFilteredResults] = useState<ClusterConnectorInfo[]>([]);
   const [searchText, setSearchText] = useState(uiSettings.connectorsList.quickSearch);
+
+  const canCreateConnector = api.userData?.canCreateTopics !== false;
+  const canEditCluster = cluster?.canEditCluster !== false;
+  const canCreate = canCreateConnector && canEditCluster;
+  const createTooltipLabel = !canCreateConnector
+    ? "You don't have permission to create connectors"
+    : "You don't have 'editConnectCluster' permissions for this connect cluster";
 
   const dataSource = useCallback(() => connectors, [connectors]);
 
@@ -134,9 +141,22 @@ const ConnectorsList = ({ clusterName, connectors }: { clusterName: string; conn
   return (
     <div>
       <div style={{ display: 'flex', marginBottom: '.5em' }}>
-        <Link params={{ clusterName }} to="/connect-clusters/$clusterName/create-connector">
-          <Button variant="solid">Create connector</Button>
-        </Link>
+        <Tooltip
+          hasArrow={true}
+          isDisabled={canCreate}
+          label={createTooltipLabel}
+          placement="top"
+        >
+          {canCreate ? (
+            <Link params={{ clusterName }} to="/connect-clusters/$clusterName/create-connector">
+              <Button variant="solid">Create connector</Button>
+            </Link>
+          ) : (
+            <Button isDisabled variant="solid">
+              Create connector
+            </Button>
+          )}
+        </Tooltip>
       </div>
 
       <Box my={5}>

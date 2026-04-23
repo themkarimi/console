@@ -19,6 +19,7 @@ import {
   SearchField,
   Stack,
   Text,
+  Tooltip,
 } from '@redpanda-data/ui';
 import { Link } from '@tanstack/react-router';
 import { CheckIcon, CloseIcon, TrashIcon } from 'components/icons';
@@ -30,7 +31,7 @@ import {
   type TransformMetadata,
 } from '../../../protogen/redpanda/api/dataplane/v1/transform_pb';
 import { appGlobal } from '../../../state/app-global';
-import { transformsApi } from '../../../state/backend-api';
+import { api, transformsApi } from '../../../state/backend-api';
 import { useUISettingsStore } from '../../../state/ui';
 import { DefaultSkeleton } from '../../../utils/tsx-utils';
 import { encodeURIComponentPercents } from '../../../utils/utils';
@@ -128,9 +129,22 @@ const TransformsListContent: FC = () => {
       </Text>
 
       <Stack direction="row" mb="6">
-        <Link to="/transforms-setup">
-          <Button variant="outline">Create transform</Button>
-        </Link>
+        <Tooltip
+          hasArrow
+          isDisabled={api.userData?.canCreateTransforms !== false}
+          label="You don't have the 'canCreateTransforms' permission"
+          placement="top"
+        >
+          {api.userData?.canCreateTransforms === false ? (
+            <Button isDisabled variant="outline">
+              Create transform
+            </Button>
+          ) : (
+            <Link to="/transforms-setup">
+              <Button variant="outline">Create transform</Button>
+            </Link>
+          )}
+        </Tooltip>
 
         <Button isDisabled variant="outline">
           Export metrics
@@ -233,7 +247,7 @@ const TransformsListContent: FC = () => {
                         });
                     });
                   }}
-                  // disabledReason={api.userData?.canDeleteTransforms === false ? 'You don\'t have the \'canDeleteTransforms\' permission' : undefined}
+                  isDisabled={api.userData?.canDeleteTransforms === false}
                   variant="icon"
                 >
                   <TrashIcon />

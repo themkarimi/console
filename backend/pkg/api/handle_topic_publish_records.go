@@ -11,10 +11,14 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/cloudhut/common/rest"
 	"github.com/twmb/franz-go/pkg/kgo"
+
+	"github.com/redpanda-data/console/backend/pkg/auth/oidc"
+	"github.com/redpanda-data/console/backend/pkg/config"
 )
 
 type recordsRequest struct {
@@ -120,6 +124,20 @@ func (api *API) handlePublishTopicsRecords() http.HandlerFunc {
 		if restErr != nil {
 			rest.SendRESTError(w, r, api.Logger, restErr)
 			return
+		}
+
+		if identity := oidc.UserIdentityFromContext(r.Context()); identity != nil {
+			for _, topicName := range req.TopicNames {
+				if !identity.CanAccessResource(config.ResourceTypeTopic, topicName, config.ResourcePermissionLevelWrite) {
+					rest.SendRESTError(w, r, api.Logger, &rest.Error{
+						Err:      fmt.Errorf("not authorized to publish records to topic %q", topicName),
+						Status:   http.StatusForbidden,
+						Message:  fmt.Sprintf("You are not authorized to publish records to topic %q", topicName),
+						IsSilent: false,
+					})
+					return
+				}
+			}
 		}
 
 		// 3. Submit publish topic records request

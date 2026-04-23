@@ -19,7 +19,10 @@ import (
 	"time"
 
 	"github.com/cloudhut/common/rest"
+
 	"github.com/go-chi/chi/v5"
+
+	"github.com/redpanda-data/console/backend/pkg/auth/oidc"
 )
 
 // BasePathCtxKey is a helper to avoid allocations, idea taken from chi
@@ -105,6 +108,104 @@ func (b *basePathMiddleware) Wrap(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// auditLogMiddleware logs an audit entry for mutating REST API requests
+// (POST, PUT, PATCH, DELETE), mirroring the fields produced by the Connect AuditLogInterceptor.
+func auditLogMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+				// fall through to audit logging
+			default:
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			ww := &statusRecorder{ResponseWriter: w, statusCode: http.StatusOK}
+
+			next.ServeHTTP(ww, r)
+
+			attrs := []slog.Attr{
+				slog.String("action", actionFromMethod(r.Method)),
+				slog.String("peer_address", r.RemoteAddr),
+				slog.String("status", strconv.Itoa(ww.statusCode)),
+			}
+
+			if rt := resourceTypeFromPath(r.URL.Path); rt != "" {
+				attrs = append(attrs, slog.String("resource_type", rt))
+			}
+
+			if rctx := chi.RouteContext(r.Context()); rctx != nil {
+				for i, key := range rctx.URLParams.Keys {
+					if key == "*" || i >= len(rctx.URLParams.Values) {
+						continue
+					}
+					if v := rctx.URLParams.Values[i]; v != "" {
+						attrs = append(attrs, slog.String("resource_name", v))
+						break
+					}
+				}
+			}
+
+			if identity := oidc.UserIdentityFromContext(r.Context()); identity != nil {
+				attrs = append(attrs,
+					slog.String("user_name", identity.DisplayName),
+					slog.String("user_role", identity.Role),
+				)
+			}
+
+			logger.LogAttrs(r.Context(), slog.LevelInfo, "audit", attrs...)
+		})
+	}
+}
+
+// statusRecorder wraps http.ResponseWriter to capture the response status code.
+type statusRecorder struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (sr *statusRecorder) WriteHeader(code int) {
+	sr.statusCode = code
+	sr.ResponseWriter.WriteHeader(code)
+}
+
+// resourceTypeFromPath extracts the resource type from a REST URL path.
+// It takes the first path segment after "/api/" and singularizes simple names
+// (e.g. "/api/topics/foo" → "topic", "/api/kafka-connect/..." → "kafka-connect").
+func resourceTypeFromPath(path string) string {
+	const prefix = "/api/"
+	if !strings.HasPrefix(path, prefix) {
+		return ""
+	}
+	p := path[len(prefix):]
+	if i := strings.Index(p, "/"); i >= 0 {
+		p = p[:i]
+	}
+	if p == "" {
+		return ""
+	}
+	// Singularize simple (non-hyphenated) plural names.
+	if !strings.Contains(p, "-") {
+		p = strings.TrimSuffix(p, "s")
+	}
+	return p
+}
+
+// actionFromMethod maps an HTTP method to an uppercase audit action label.
+func actionFromMethod(method string) string {
+	switch method {
+	case http.MethodPost:
+		return "CREATE"
+	case http.MethodPut, http.MethodPatch:
+		return "UPDATE"
+	case http.MethodDelete:
+		return "DELETE"
+	default:
+		return strings.ToUpper(method)
+	}
 }
 
 // ensurePrefixFormat ensures that the given path starts and ends with a slash

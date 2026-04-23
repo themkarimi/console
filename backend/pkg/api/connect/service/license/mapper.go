@@ -72,8 +72,24 @@ func (mapper) consoleLicenseToProto(in license.License) *v1alpha1.License {
 }
 
 func (m mapper) enterpriseFeaturesToProto(in rpadmin.EnterpriseFeaturesResponse) *v1alpha1.ListEnterpriseFeaturesResponse {
-	features := make([]*v1alpha1.ListEnterpriseFeaturesResponse_Feature, len(in.Features))
-	for i, f := range in.Features {
+	// Filter out features for experimental use
+	excludedFeatures := map[string]bool{
+		"oidc":                                 true,
+		"rbac":                                 true,
+		"audit_logging":                        true,
+		"partition_auto_balancing_continuous":  true,
+		"core_balancing_continuous":            true,
+	}
+
+	filteredFeatures := make([]rpadmin.EnterpriseFeature, 0, len(in.Features))
+	for _, f := range in.Features {
+		if !excludedFeatures[f.Name] {
+			filteredFeatures = append(filteredFeatures, f)
+		}
+	}
+
+	features := make([]*v1alpha1.ListEnterpriseFeaturesResponse_Feature, len(filteredFeatures))
+	for i, f := range filteredFeatures {
 		features[i] = m.enterpriseFeatureToProto(f)
 	}
 

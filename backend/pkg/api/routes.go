@@ -80,6 +80,7 @@ func (api *API) setupConnectWithGRPCGateway(r chi.Router) {
 	observerInterceptor := commoninterceptor.NewObserver(apiProm.ObserverAdapter())
 	baseInterceptors := []connect.Interceptor{
 		observerInterceptor,
+		interceptor.NewAuditLogInterceptor(api.Logger),
 		interceptor.NewErrorLogInterceptor(api.Logger),
 		interceptor.NewRequestValidationInterceptor(v, loggerpkg.Named(api.Logger, "validator")),
 		interceptor.NewEndpointCheckInterceptor(&api.Cfg.Console.API, loggerpkg.Named(api.Logger, "endpoint_checker")),
@@ -156,6 +157,12 @@ func (api *API) setupConnectWithGRPCGateway(r chi.Router) {
 		api.ConnectSvc,
 	)
 
+	// Select the authentication service handler depending on whether OIDC is enabled.
+	var authSvcHandler consolev1alpha1connect.AuthenticationServiceHandler = &AuthenticationDefaultHandler{}
+	if api.Cfg.Login.OIDC.Enabled {
+		authSvcHandler = &OIDCAuthenticationHandler{}
+	}
+
 	// Call Hook
 	hookOutput := api.Hooks.Route.ConfigConnectRPC(ConfigConnectRPCRequest{
 		BaseInterceptors: baseInterceptors,
@@ -170,7 +177,7 @@ func (api *API) setupConnectWithGRPCGateway(r chi.Router) {
 			consolev1alpha1connect.SecurityServiceName:       consolev1alpha1connect.UnimplementedSecurityServiceHandler{},
 			consolev1alpha1connect.LicenseServiceName:        licenseSvc,
 			consolev1alpha1connect.TransformServiceName:      consoleTransformSvcV1,
-			consolev1alpha1connect.AuthenticationServiceName: &AuthenticationDefaultHandler{},
+			consolev1alpha1connect.AuthenticationServiceName: authSvcHandler,
 			consolev1alpha1connect.ClusterStatusServiceName:  clusterStatusSvc,
 			consolev1alpha1connect.SecretServiceName:         consolev1alpha1connect.UnimplementedSecretServiceHandler{},
 			dataplanev1alpha2connect.ACLServiceName:          aclSvcV1alpha2,
@@ -537,10 +544,32 @@ func (api *API) routes() *chi.Mux {
 		MaxAge:           300, // Maximum value not ignored by any of major browsers
 	}))
 
+	// When OIDC is enabled, inject session identity into every request context.
+	// Individual route groups below add requireAuthMiddleware to enforce authentication.
+	if api.Cfg.Login.OIDC.Enabled {
+		baseRouter.Use(api.sessionInjectMiddleware)
+	}
+
 	// Fork a new router so that we can inject middlewares that are specific to the Connect API
 	baseRouter.Group(func(router chi.Router) {
+		// When OIDC is enabled protect the ConnectRPC services, but allow
+		// ListAuthenticationMethods through so the frontend can determine the
+		// login method even when the user has no active session.
+		if api.Cfg.Login.OIDC.Enabled {
+			router.Use(requireAuthMiddleware([]string{
+				"/redpanda.api.console.v1alpha1.AuthenticationService/ListAuthenticationMethods",
+				"/auth/",
+			}))
+		}
 		api.setupConnectWithGRPCGateway(router)
 	})
+
+	// OIDC auth routes (always accessible, no session required).
+	if api.Cfg.Login.OIDC.Enabled {
+		baseRouter.Get("/auth/login/oidc", api.handleOIDCLogin())
+		baseRouter.Get("/auth/callback/oidc", api.handleOIDCCallback())
+		baseRouter.Get("/auth/logout", api.handleOIDCLogout())
+	}
 
 	baseRouter.Group(func(router chi.Router) {
 		// Init middlewares - Do set up of any shared/third-party middleware and handlers
@@ -583,6 +612,11 @@ func (api *API) routes() *chi.Mux {
 		// API routes
 		router.Group(func(r chi.Router) {
 			r.Use(createSetVersionInfoHeader(version.BuiltAt))
+			r.Use(auditLogMiddleware(api.Logger))
+			// When OIDC is enabled, all legacy REST API routes require authentication.
+			if api.Cfg.Login.OIDC.Enabled {
+				r.Use(requireAuthMiddleware(nil))
+			}
 			api.Hooks.Route.ConfigAPIRouter(r)
 
 			r.Route("/api", func(r chi.Router) {

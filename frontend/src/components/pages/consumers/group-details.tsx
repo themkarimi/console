@@ -613,6 +613,9 @@ const ProtocolType = (p: { group: GroupDescription }) => {
 };
 
 function cannotEditGroupReason(group: GroupDescription, featurePatchGroup: boolean): string | undefined {
+  if (api.userData?.canCreateAcls === false) {
+    return "You don't have permission to edit consumer groups";
+  }
   if (group.noEditPerms) {
     return "You don't have 'editConsumerGroup' permissions for this group";
   }
@@ -625,6 +628,9 @@ function cannotEditGroupReason(group: GroupDescription, featurePatchGroup: boole
 }
 
 function cannotDeleteGroupReason(group: GroupDescription, featureDeleteGroup: boolean): string | undefined {
+  if (api.userData?.canDeleteTopics === false) {
+    return "You don't have permission to delete consumer groups";
+  }
   if (group.noDeletePerms) {
     return "You don't have 'deleteConsumerGroup' permissions for this group";
   }
@@ -640,6 +646,9 @@ function cannotDeleteGroupOffsetsReason(
   group: GroupDescription,
   featureDeleteGroupOffsets: boolean
 ): string | undefined {
+  if (api.userData?.canDeleteTopics === false) {
+    return "You don't have permission to delete consumer group offsets";
+  }
   if (group.noEditPerms) {
     return "You don't have 'deleteConsumerGroup' permissions for this group";
   }

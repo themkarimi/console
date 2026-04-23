@@ -43,7 +43,7 @@ import RedpandaLogoWhite from '../../assets/redpanda/redpanda-logo-next-white.sv
 import { AuthenticationMethod } from '../../protogen/redpanda/api/console/v1alpha1/authentication_pb';
 import { api, useApiStoreHook } from '../../state/backend-api';
 import { useSupportedFeaturesStore } from '../../state/supported-features';
-import { AppFeatures } from '../../utils/env';
+import { AppFeatures, getBasePath } from '../../utils/env';
 import { getUserInitials } from '../../utils/string';
 import { UserPreferencesDialog } from '../misc/user-preferences';
 import { Text } from '../redpanda-ui/components/typography';
@@ -167,7 +167,11 @@ const UserProfile = () => {
             onClick={async () => {
               handleMenuItemClick();
               await api.logout();
-              window.location.reload();
+              // Hard-navigate to the login URL (not reload of the current
+              // page) so the app boots cleanly with no stale in-memory state
+              // and no SPA race between MobX observers, RequireAuth and the
+              // router during the auth transition.
+              window.location.assign(`${getBasePath() || ''}/login`);
             }}
           >
             <LogOut aria-hidden="true" className="mr-2 h-4 w-4" />

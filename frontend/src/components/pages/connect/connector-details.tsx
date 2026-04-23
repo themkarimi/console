@@ -119,7 +119,11 @@ const KafkaConnectorMain = ({
     return null;
   }
 
-  return (
+  const hasRbacPermission = api.userData?.canCreateTopics !== false;
+  const resolvedCanEdit = Boolean(canEdit) && hasRbacPermission;
+  const canEditTooltipLabel = !hasRbacPermission
+    ? "You don't have permission to perform this action"
+    : "You don't have 'canEditConnectCluster' permissions for this connect cluster";
     <>
       {/* [Pause] [Restart] [Delete] */}
       <Flex alignItems="center" flexDirection="row" gap="3">
@@ -127,12 +131,12 @@ const KafkaConnectorMain = ({
         {connectClusterStore.validateConnectorState(connectorName, ['RUNNING', 'PAUSED']) ? (
           <Tooltip
             hasArrow={true}
-            isDisabled={canEdit === true}
-            label={"You don't have 'canEditConnectCluster' permissions for this connect cluster"}
+            isDisabled={resolvedCanEdit}
+            label={canEditTooltipLabel}
             placement="top"
           >
             <Button
-              isDisabled={!canEdit}
+              isDisabled={!resolvedCanEdit}
               minWidth="32"
               onClick={() => {
                 setS({ pausingConnector: connector });
@@ -147,12 +151,12 @@ const KafkaConnectorMain = ({
         {/* [Restart] */}
         <Tooltip
           hasArrow={true}
-          isDisabled={canEdit === true}
-          label={"You don't have 'canEditConnectCluster' permissions for this connect cluster"}
+          isDisabled={resolvedCanEdit}
+          label={canEditTooltipLabel}
           placement="top"
         >
           <Button
-            isDisabled={!canEdit}
+            isDisabled={!resolvedCanEdit}
             minWidth="32"
             onClick={() => {
               setS({ restartingConnector: connector });
@@ -166,8 +170,8 @@ const KafkaConnectorMain = ({
         {/* [Delete] */}
         <Tooltip
           hasArrow={true}
-          isDisabled={canEdit === true}
-          label={"You don't have 'canEditConnectCluster' permissions for this connect cluster"}
+          isDisabled={resolvedCanEdit}
+          label={canEditTooltipLabel}
           placement="top"
         >
           <Button
@@ -211,6 +215,230 @@ const KafkaConnectorMain = ({
                   )}
                 </Box>
 
+                {/* Update Config Button */}
+                <Flex m={4} mb={6}>
+                  <Tooltip
+                    hasArrow={true}
+                    isDisabled={resolvedCanEdit}
+                    label={canEditTooltipLabel}
+                    placement="top"
+                  >
+                    <Button
+                      isDisabled={!resolvedCanEdit}
+                      onClick={() => {
+                        setS({ updatingConnector: { clusterName, connectorName } });
+                      }}
+                      style={{ width: '200px' }}
+                      variant="outline"
+                    >
+                      Update Config
+                    </Button>
+                  </Tooltip>
+                </Flex>
+              </Box>
+            ),
+          },
+          {
+            key: 'logs',
+            name: 'Logs',
+            isDisabled: logsTopic ? false : `Logs topic '${LOGS_TOPIC_NAME}' does not exist.`,
+            component: (
+              <Box mt="8">
+                <LogsTab clusterName={clusterName} connectClusterStore={connectClusterStore} connector={connector} />
+              </Box>
+            ),
+          },
+        ]}
+        marginBlock="2"
+        size="lg"
+      />
+
+      {/* Pause/Resume Modal */}
+      <ConfirmModal<ClusterConnectorInfo>
+        clearTarget={() => {
+          setS({ pausingConnector: null });
+        }}
+        content={(c) => (
+          <>
+            {connectClusterStore.validateConnectorState(connectorName, ['RUNNING']) ? 'Pause' : 'Resume'} connector{' '}
+            <strong>{c.name}</strong>?
+          </>
+        )}
+        onOk={async (c) => {
+          if (connectClusterStore.validateConnectorState(connectorName, ['RUNNING'])) {
+            await api.pauseConnector(clusterName, c.name);
+          } else {
+            await api.resumeConnector(clusterName, c.name);
+          }
+          await delay(500);
+          await refreshData(true);
+        }}
+        successMessage={(c) => (
+          <>
+            {connectClusterStore.validateConnectorState(connectorName, ['RUNNING']) ? 'Resumed' : 'Paused'} connector{' '}
+            <strong>{c.name}</strong>
+          </>
+        )}
+        target={() => $state.pausingConnector}
+      />
+
+      {/* Restart */}
+      <ConfirmModal<ClusterConnectorInfo>
+        clearTarget={() => {
+          setS({ restartingConnector: null });
+        }}
+        content={(c) => (
+          <>
+            Restart connector <strong>{c.name}</strong>?
+          </>
+        )}
+        onOk={async (c) => {
+          await api.restartConnector(clusterName, c.name);
+          await refreshData(true);
+        }}
+        successMessage={(c) => (
+          <>
+            Successfully restarted connector <strong>{c.name}</strong>
+          </>
+        )}
+        target={() => $state.restartingConnector}
+      />
+
+      {/* Update Config */}
+      <ConfirmModal<UpdatingConnectorData>
+        clearTarget={() => {
+          setS({ updatingConnector: null });
+        }}
+        content={(c) => (
+          <>
+            Update configuration of connector <strong>{c.connectorName}</strong>?
+          </>
+        )}
+        onOk={async (c) => {
+          connectClusterStore.getConnectorStore(c.connectorName);
+          await connectClusterStore.updateConnnector(c.connectorName);
+          appGlobal.historyPush(`/connect-clusters/${encodeURIComponent(clusterName)}`);
+          await refreshData(true);
+        }}
+        successMessage={(c) => (
+          <>
+            Successfully updated config of <strong>{c.connectorName}</strong>
+          </>
+        )}
+        target={() => $state.updatingConnector}
+      />
+
+      {/* Restart Task */}
+      <ConfirmModal<RestartingTaskData>
+        clearTarget={() => {
+          setS({ restartingTask: null });
+        }}
+        content={(c) => (
+          <>
+            Restart task <strong>{c.taskId}</strong> of <strong>{c.connectorName}</strong>?
+          </>
+        )}
+        onOk={async (c) => {
+          await api.restartTask(c.clusterName, c.connectorName, c.taskId);
+          await refreshData(true);
+        }}
+        successMessage={(c) => (
+          <>
+            Successfully restarted <strong>{c.taskId}</strong> of <strong>{c.connectorName}</strong>
+          </>
+        )}
+        target={() => $state.restartingTask}
+      />
+
+      {/* Delete Connector */}
+      <ConfirmModal<string>
+        clearTarget={() => {
+          setS({ deletingConnector: null });
+        }}
+        content={(c) => (
+          <>
+            Delete connector <strong>{c}</strong>?
+          </>
+        )}
+        onOk={async (_connectorName) => {
+          await connectClusterStore.deleteConnector(connectorName);
+        }}
+        onSuccess={() => {
+          // Navigate after the success toast has been queued.
+          // Refreshing before navigation would cause the connector to disappear
+          // from the store, unmounting this component before the toast renders.
+          // The cluster-list page refreshes on its own when it mounts.
+          appGlobal.historyPush(`/connect-clusters/${encodeURIComponent(clusterName)}`);
+        }}
+        successMessage={(c) => (
+          <>
+            Deleted connector <strong>{c}</strong>
+          </>
+        )}
+        target={() => $state.deletingConnector}
+      />
+    </>
+  );
+};
+
+const ConfigOverviewTab = (p: {
+  clusterName: string;
+  connectClusterStore: ConnectClusterStore;
+  connector: ClusterConnectorInfo;
+}) => {
+  const { connectClusterStore, connector } = p;
+  const connectorName = connector.name;
+
+  return (
+    <Grid
+      alignItems="start"
+      gap="6"
+      gridTemplateRows="auto"
+      templateAreas={`
+              "errors errors"
+              "health details"
+              "tasks details"
+          `}
+    >
+      <Flex flexDirection="column" gap="2" gridArea="errors">
+        {connector.errors.map((e) => (
+          <ConnectorErrorModal error={e} key={e.title} />
+        ))}
+      </Flex>
+
+      <Section gridArea="health">
+        <Flex flexDirection="row" gap="4" m="1">
+          <Box background={statusColors[connector.status]} borderRadius="3px" width="5px" />
+
+          <Flex flexDirection="column">
+            <Text fontSize="3xl" fontWeight="semibold">
+              {titleCase(connector.status)}
+            </Text>
+            <Text opacity=".5">Status</Text>
+          </Flex>
+        </Flex>
+      </Section>
+
+      <Section gridArea="tasks" minWidth="500px" py={4}>
+        <Flex alignItems="center" gap="2" mb="6" mt="2">
+          <Heading as="h3" color="blackAlpha.800" fontSize="1rem" fontWeight="semibold" textTransform="uppercase">
+            Tasks
+          </Heading>
+          <Text fontWeight="normal" opacity=".5">
+            ({connectClusterStore.getConnectorTasks(connectorName)?.length || 0})
+          </Text>
+        </Flex>
+        <DataTable<ClusterConnectorTaskInfo>
+          columns={[
+            {
+              header: 'Task',
+              accessorKey: 'taskId',
+              size: 200,
+              cell: ({
+                row: {
+                  original: { taskId },
+                },
+              }) => <Code nowrap>Task-{taskId}</Code>,
                 {/* Update Config Button */}
                 <Flex m={4} mb={6}>
                   <Tooltip

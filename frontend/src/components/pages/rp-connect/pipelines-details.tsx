@@ -119,9 +119,13 @@ const RpConnectPipelinesDetailsContent = ({ pipeline, pipelineId }: { pipeline: 
       </Box>
 
       <Flex gap="4" mb="4">
-        <Link params={{ pipelineId }} to="/rp-connect/$pipelineId/edit">
-          <Button variant="solid">Edit</Button>
-        </Link>
+        {api.userData?.canCreateTransforms === false ? (
+          <Button isDisabled variant="solid">Edit</Button>
+        ) : (
+          <Link params={{ pipelineId }} to="/rp-connect/$pipelineId/edit">
+            <Button variant="solid">Edit</Button>
+          </Link>
+        )}
 
         <Button
           isDisabled={isChangingPauseState || isTransitioningState}
@@ -186,6 +190,7 @@ const RpConnectPipelinesDetailsContent = ({ pipeline, pipelineId }: { pipeline: 
           {isStopped ? 'Start' : 'Stop'}
         </Button>
         <Button
+          isDisabled={api.userData?.canDeleteTransforms === false}
           onClick={() => {
             openDeleteModal(pipeline.displayName, () => {
               pipelinesApi

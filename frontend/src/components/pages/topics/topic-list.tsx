@@ -148,14 +148,22 @@ const TopicList: FC = () => {
       </Section>
 
       <div className="mt-2 mb-4">
-        <Button
-          className="min-w-[160px]"
-          data-testid="create-topic-button"
-          onClick={() => setIsCreateTopicModalOpen(true)}
-          variant="solid"
+        <Tooltip
+          hasArrow
+          isDisabled={api.userData?.canCreateTopics !== false}
+          label="You don't have permission to create topics"
+          placement="top"
         >
-          Create topic
-        </Button>
+          <Button
+            className="min-w-[160px]"
+            data-testid="create-topic-button"
+            isDisabled={api.userData?.canCreateTopics === false}
+            onClick={() => setIsCreateTopicModalOpen(true)}
+            variant="solid"
+          >
+            Create topic
+          </Button>
+        </Tooltip>
       </div>
       <Section>
         <div className="flex items-center justify-between gap-4">
@@ -523,8 +531,7 @@ function DeleteDisabledTooltip(props: { topic: Topic; children: JSX.Element }): 
 }
 
 function hasDeletePrivilege() {
-  // TODO - we will provide ACL for this
-  return true;
+  return api.userData?.canDeleteTopics !== false;
 }
 
 export default TopicList;
