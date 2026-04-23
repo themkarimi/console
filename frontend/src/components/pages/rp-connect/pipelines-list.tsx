@@ -31,7 +31,7 @@ const { ToastContainer, toast } = createStandaloneToast();
 /**
  * Navigates to /rp-connect/create (legacy flow)
  */
-const LegacyCreatePipelineButton = observer(() => {
+const LegacyCreatePipelineButton = () => {
   const cannotCreate = api.userData?.canCreateTransforms === false;
   return (
     <div>
@@ -40,7 +40,7 @@ const LegacyCreatePipelineButton = observer(() => {
       </NewButton>
     </div>
   );
-});
+};
 
 /**
  * Shows image, text, and create button

@@ -13,7 +13,6 @@ import { Avatar, Box, Button, ColorModeSwitch, CopyButton, Flex, Popover, Popove
 import { Link, useLocation, useMatchRoute } from '@tanstack/react-router';
 import { Heading } from 'components/redpanda-ui/components/typography';
 import { cn } from 'components/redpanda-ui/lib/utils';
-import { observer } from 'mobx-react';
 import { Fragment, useMemo, useState } from 'react';
 
 import { AuthenticationMethod } from '../../protogen/redpanda/api/console/v1alpha1/authentication_pb';
@@ -149,7 +148,7 @@ function AppPageHeader() {
 
 export default AppPageHeader;
 
-const UserMenu = observer(() => {
+const UserMenu = () => {
   const [preferencesOpen, setPreferencesOpen] = useState(false);
 
   const userData = api.userData;
@@ -212,7 +211,7 @@ const UserMenu = observer(() => {
       <UserPreferencesDialog isOpen={preferencesOpen} onClose={() => setPreferencesOpen(false)} />
     </>
   );
-});
+};
 
 /**
  * Custom React Hook: Determines whether to show the refresh button based on route matches.
