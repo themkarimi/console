@@ -19,6 +19,7 @@ require (
 	github.com/carlmjohnson/requests v0.25.1
 	github.com/cloudhut/common v0.11.0
 	github.com/cloudhut/connect-client v0.0.0-20240523140316-27c93e339567
+	github.com/coreos/go-oidc/v3 v3.18.0
 	github.com/docker/go-connections v0.6.0
 	github.com/dop251/goja v0.0.0-20251103141225-af2ceb9156d7
 	github.com/fxamacker/cbor/v2 v2.9.0
@@ -66,6 +67,7 @@ require (
 	go.vallahaye.net/connect-gateway v0.11.0
 	golang.org/x/exp v0.0.0-20251113190631-e25ba8c21ef6
 	golang.org/x/net v0.52.0
+	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sync v0.20.0
 	golang.org/x/text v0.35.0
 	google.golang.org/genproto v0.0.0-20260217215200-42d3e9bedb6d
@@ -124,6 +126,7 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
