@@ -11,12 +11,11 @@
 
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
 
-const routeApi = getRouteApi('/agents/$id');
+const routeApi = getRouteApi('/agents/$id/');
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from 'components/redpanda-ui/components/tabs';
-import { AlertCircle, Loader2, Network, Search, Settings } from 'lucide-react';
-import { runInAction } from 'mobx';
-import { useEffect, useState } from 'react';
+import { AlertCircle, FileText, Loader2, Network, Search, Settings } from 'lucide-react';
+import { useEffect } from 'react';
 import { useGetAIAgentQuery } from 'react-query/api/ai-agent';
 import { uiState } from 'state/ui-state';
 
@@ -24,24 +23,23 @@ import { AIAgentCardTab } from './ai-agent-card-tab';
 import { AIAgentConfigurationTab } from './ai-agent-configuration-tab';
 import { AIAgentDetailsHeader } from './ai-agent-details-header';
 import { AIAgentInspectorTab } from './ai-agent-inspector-tab';
+import { AIAgentTranscriptsTab } from './ai-agent-transcripts-tab';
 
 export const updatePageTitle = (agentName?: string) => {
-  runInAction(() => {
-    uiState.pageTitle = agentName ? `AI Agent - ${agentName}` : 'AI Agent Details';
-    uiState.pageBreadcrumbs = [
-      { title: 'AI Agents', linkTo: '/agents' },
-      { title: agentName || 'Details', linkTo: '', heading: agentName || 'AI Agent Details' },
-    ];
-  });
+  uiState.pageTitle = agentName ? `AI Agent - ${agentName}` : 'AI Agent Details';
+  uiState.pageBreadcrumbs = [
+    { title: 'AI Agents', linkTo: '/agents' },
+    { title: agentName || 'Details', linkTo: '', heading: agentName || 'AI Agent Details' },
+  ];
 };
 
 export const AIAgentDetailsPage = () => {
   const { id } = routeApi.useParams();
-  const navigate = useNavigate({ from: '/agents/$id' });
+  const navigate = useNavigate({ from: '/agents/$id/' });
   // Use fine-grained selector to only re-render when tab changes
   const tab = routeApi.useSearch({ select: (s) => s.tab });
 
-  const [activeTab, setActiveTab] = useState(tab || 'configuration');
+  const activeTab = tab || 'configuration';
 
   const { data: aiAgentData, isLoading, error } = useGetAIAgentQuery({ id: id || '' }, { enabled: !!id });
 
@@ -51,16 +49,7 @@ export const AIAgentDetailsPage = () => {
     }
   }, [aiAgentData]);
 
-  useEffect(() => {
-    if (tab) {
-      setActiveTab(tab);
-    } else {
-      setActiveTab('configuration');
-    }
-  }, [tab]);
-
   const handleTabChange = (value: string) => {
-    setActiveTab(value);
     navigate({ search: { tab: value } });
   };
 
@@ -108,6 +97,12 @@ export const AIAgentDetailsPage = () => {
               A2A
             </div>
           </TabsTrigger>
+          <TabsTrigger className="gap-2" value="transcripts">
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Transcripts
+            </div>
+          </TabsTrigger>
           <TabsTrigger className="gap-2" value="inspector">
             <Search className="h-4 w-4" />
             Inspector
@@ -119,6 +114,9 @@ export const AIAgentDetailsPage = () => {
         </TabsContent>
         <TabsContent value="agent-card">
           <AIAgentCardTab />
+        </TabsContent>
+        <TabsContent value="transcripts">
+          <AIAgentTranscriptsTab />
         </TabsContent>
         <TabsContent className="flex h-full flex-col" value="inspector">
           <AIAgentInspectorTab />

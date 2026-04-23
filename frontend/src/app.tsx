@@ -34,7 +34,7 @@ import './globals.css';
 import { Content } from '@builder.io/sdk-react';
 import { TransportProvider } from '@connectrpc/connect-query';
 import { createConnectTransport } from '@connectrpc/connect-web';
-import { ChakraProvider, redpandaTheme, redpandaToastOptions } from '@redpanda-data/ui';
+import { ChakraProvider, redpandaToastOptions } from '@redpanda-data/ui';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
@@ -42,14 +42,16 @@ import { builderCustomComponents } from 'components/builder-io/builder-custom-co
 import { BUILDER_API_KEY } from 'components/constants';
 import { CustomFeatureFlagProvider } from 'custom-feature-flag-provider';
 import useDeveloperView from 'hooks/use-developer-view';
-import { observer } from 'mobx-react';
 import { protobufRegistry } from 'protobuf-registry';
 import queryClient from 'query-client';
+import { useEffect } from 'react';
 import { getBasePath } from 'utils/env';
+import { patchedRedpandaTheme as redpandaTheme } from 'utils/redpanda-theme';
 
 import { NotFoundPage } from './components/misc/not-found-page';
 import { addBearerTokenInterceptor, checkExpiredLicenseInterceptor, getGrpcBasePath, setup } from './config';
 import { routeTree } from './routeTree.gen';
+import { installUISettingsSideEffects } from './state/ui';
 
 // Create transport before router so loaders can use it
 const dataplaneTransport = createConnectTransport({
@@ -91,9 +93,19 @@ declare module '@tanstack/react-router' {
   }
 }
 
+const EMPTY_SETUP_ARGS = {};
+
 const App = () => {
   const developerView = useDeveloperView();
-  setup({});
+
+  useEffect(() => {
+    const setupTeardown = setup(EMPTY_SETUP_ARGS);
+    const uiSettingsTeardown = installUISettingsSideEffects();
+    return () => {
+      uiSettingsTeardown();
+      setupTeardown?.();
+    };
+  }, []);
 
   // Need to use CustomFeatureFlagProvider for completeness with EmbeddedApp
   return (
@@ -111,4 +123,4 @@ const App = () => {
   );
 };
 
-export default observer(App);
+export default App;

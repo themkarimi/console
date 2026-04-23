@@ -11,10 +11,12 @@
 
 import { create } from '@bufbuild/protobuf';
 import { createRouterTransport } from '@connectrpc/connect';
+import userEvent from '@testing-library/user-event';
 import { ListSecretsResponseSchema } from 'protogen/redpanda/api/console/v1alpha1/secret_pb';
 import { listSecrets } from 'protogen/redpanda/api/console/v1alpha1/secret-SecretService_connectquery';
 import { Scope, SecretSchema } from 'protogen/redpanda/api/dataplane/v1/secret_pb';
-import { MAX_PAGE_SIZE } from 'react-query/react-query.utils';
+import React from 'react';
+import { SECRETS_LIST_PAGE_SIZE } from 'react-query/api/secret';
 import { renderWithFileRoutes, screen, waitFor } from 'test-utils';
 
 vi.mock('state/ui-state', () => ({
@@ -35,7 +37,23 @@ vi.mock('config', async (importOriginal) => {
   };
 });
 
+Element.prototype.scrollIntoView = vi.fn();
+
 import { SecretsStoreListPage } from './secrets-store-list-page';
+
+const createListSecretsTransport = (listSecretsMock: ReturnType<typeof vi.fn>) =>
+  createRouterTransport(({ rpc }) => {
+    rpc(listSecrets, listSecretsMock);
+  });
+
+// Hoisted once — 25 rows = 3 pages at the page's hard-coded pageSize of 10.
+const PAGINATION_SECRETS_FIXTURE = Array.from({ length: 25 }, (_, index) =>
+  create(SecretSchema, {
+    id: `test-secret-${index + 1}`,
+    labels: { env: 'production' },
+    scopes: [Scope.AI_GATEWAY],
+  })
+);
 
 describe('SecretsStoreListPage', () => {
   test('should call listSecrets on render and display secret IDs', async () => {
@@ -53,24 +71,79 @@ describe('SecretsStoreListPage', () => {
     });
 
     const listSecretsMock = vi.fn().mockReturnValue(listSecretsResponse);
-
-    const transport = createRouterTransport(({ rpc }) => {
-      rpc(listSecrets, listSecretsMock);
-    });
+    const transport = createListSecretsTransport(listSecretsMock);
 
     renderWithFileRoutes(<SecretsStoreListPage />, { transport });
 
-    await waitFor(() => {
-      expect(screen.getByText('test-secret-123')).toBeVisible();
-    });
+    expect(await screen.findByText('test-secret-123')).toBeVisible();
 
     expect(listSecretsMock).toHaveBeenCalledTimes(1);
     const callArgs = listSecretsMock.mock.calls[0];
     expect(callArgs[0]).toMatchObject({
       request: {
-        pageSize: MAX_PAGE_SIZE,
+        pageSize: SECRETS_LIST_PAGE_SIZE,
+        pageToken: '',
       },
     });
+  });
+
+  test('follows nextPageToken until all secrets are returned', async () => {
+    const pageOne = [
+      create(SecretSchema, {
+        id: 'page1-first-secret',
+        labels: {},
+        scopes: [Scope.AI_GATEWAY],
+      }),
+    ];
+    const pageTwo = [
+      create(SecretSchema, {
+        id: 'page2-pgdb-dsn',
+        labels: {},
+        scopes: [Scope.AI_GATEWAY],
+      }),
+    ];
+
+    const listSecretsMock = vi.fn().mockImplementation(({ request }) => {
+      if (!request?.pageToken) {
+        return create(ListSecretsResponseSchema, {
+          response: { secrets: pageOne, nextPageToken: 'page2' },
+        });
+      }
+      return create(ListSecretsResponseSchema, {
+        response: { secrets: pageTwo, nextPageToken: '' },
+      });
+    });
+    const transport = createListSecretsTransport(listSecretsMock);
+
+    renderWithFileRoutes(<SecretsStoreListPage />, { transport });
+
+    expect(await screen.findByText('page1-first-secret')).toBeVisible();
+    expect(await screen.findByText('page2-pgdb-dsn')).toBeVisible();
+    expect(listSecretsMock).toHaveBeenCalledTimes(2);
+    expect(listSecretsMock.mock.calls[1][0]).toMatchObject({
+      request: { pageSize: SECRETS_LIST_PAGE_SIZE, pageToken: 'page2' },
+    });
+  });
+
+  test('stops and surfaces an error if the server returns a non-advancing pageToken', async () => {
+    const listSecretsMock = vi.fn().mockImplementation(() =>
+      create(ListSecretsResponseSchema, {
+        response: {
+          secrets: [create(SecretSchema, { id: 'looping-secret', scopes: [Scope.AI_GATEWAY] })],
+          nextPageToken: 'stuck',
+        },
+      })
+    );
+    const transport = createListSecretsTransport(listSecretsMock);
+
+    renderWithFileRoutes(<SecretsStoreListPage />, { transport });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Error loading secrets:/i)).toBeVisible();
+    });
+    // Server returned nextPageToken='stuck' on first call; second call echoed 'stuck' again and the
+    // loop bailed out. Anything higher means the guard did not trip.
+    expect(listSecretsMock).toHaveBeenCalledTimes(2);
   });
 
   test('should display empty state when no secrets exist', async () => {
@@ -82,16 +155,11 @@ describe('SecretsStoreListPage', () => {
     });
 
     const listSecretsMock = vi.fn().mockReturnValue(listSecretsResponse);
-
-    const transport = createRouterTransport(({ rpc }) => {
-      rpc(listSecrets, listSecretsMock);
-    });
+    const transport = createListSecretsTransport(listSecretsMock);
 
     renderWithFileRoutes(<SecretsStoreListPage />, { transport });
 
-    await waitFor(() => {
-      expect(screen.getByText('No secrets found.')).toBeVisible();
-    });
+    expect(await screen.findByText('No secrets found.')).toBeVisible();
   });
 
   test('should display loading state while fetching secrets', async () => {
@@ -111,9 +179,7 @@ describe('SecretsStoreListPage', () => {
         })
     );
 
-    const transport = createRouterTransport(({ rpc }) => {
-      rpc(listSecrets, listSecretsMock);
-    });
+    const transport = createListSecretsTransport(listSecretsMock);
 
     renderWithFileRoutes(<SecretsStoreListPage />, { transport });
 
@@ -121,6 +187,132 @@ describe('SecretsStoreListPage', () => {
 
     await waitFor(() => {
       expect(screen.queryByText('Loading secrets...')).not.toBeInTheDocument();
+    });
+  });
+
+  test('should update pagination footer and disable next button on the last page', async () => {
+    const user = userEvent.setup();
+
+    const listSecretsResponse = create(ListSecretsResponseSchema, {
+      response: {
+        secrets: PAGINATION_SECRETS_FIXTURE,
+        nextPageToken: '',
+      },
+    });
+
+    const listSecretsMock = vi.fn().mockReturnValue(listSecretsResponse);
+    const transport = createListSecretsTransport(listSecretsMock);
+
+    renderWithFileRoutes(<SecretsStoreListPage />, { transport });
+
+    expect(await screen.findByText('Page 1 of 3')).toBeVisible();
+
+    const previousButton = screen.getByRole('button', { name: 'Go to previous page' });
+    const nextButton = screen.getByRole('button', { name: 'Go to next page' });
+
+    expect(previousButton).toBeDisabled();
+    expect(nextButton).toBeEnabled();
+
+    await user.click(nextButton);
+
+    expect(await screen.findByText('Page 2 of 3')).toBeVisible();
+
+    expect(screen.getByRole('button', { name: 'Go to previous page' })).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: 'Go to next page' }));
+
+    expect(await screen.findByText('Page 3 of 3')).toBeVisible();
+
+    expect(screen.getByRole('button', { name: 'Go to next page' })).toBeDisabled();
+  });
+
+  test('filters secrets by ID via search input', async () => {
+    const user = userEvent.setup();
+
+    const secret1 = create(SecretSchema, {
+      id: 'alpha-secret',
+      labels: {},
+      scopes: [Scope.AI_GATEWAY],
+    });
+
+    const secret2 = create(SecretSchema, {
+      id: 'beta-secret',
+      labels: {},
+      scopes: [Scope.MCP_SERVER],
+    });
+
+    const listSecretsMock = vi.fn().mockReturnValue(
+      create(ListSecretsResponseSchema, {
+        response: { secrets: [secret1, secret2], nextPageToken: '' },
+      })
+    );
+    const transport = createListSecretsTransport(listSecretsMock);
+
+    renderWithFileRoutes(<SecretsStoreListPage />, { transport });
+
+    await waitFor(() => {
+      expect(screen.getByText('alpha-secret')).toBeVisible();
+      expect(screen.getByText('beta-secret')).toBeVisible();
+    });
+
+    const filterInput = screen.getByPlaceholderText('Filter by ID...');
+    await user.type(filterInput, 'beta');
+
+    await waitFor(() => {
+      expect(screen.getByText('beta-secret')).toBeVisible();
+      expect(screen.queryByText('alpha-secret')).not.toBeInTheDocument();
+    });
+
+    // Clear and verify all rows reappear
+    await user.clear(filterInput);
+
+    await waitFor(() => {
+      expect(screen.getByText('alpha-secret')).toBeVisible();
+      expect(screen.getByText('beta-secret')).toBeVisible();
+    });
+  });
+
+  test('scope faceted filter filters results', async () => {
+    const user = userEvent.setup();
+
+    const secret1 = create(SecretSchema, {
+      id: 'gateway-secret',
+      labels: {},
+      scopes: [Scope.AI_GATEWAY],
+    });
+
+    const secret2 = create(SecretSchema, {
+      id: 'mcp-secret',
+      labels: {},
+      scopes: [Scope.MCP_SERVER],
+    });
+
+    const listSecretsMock = vi.fn().mockReturnValue(
+      create(ListSecretsResponseSchema, {
+        response: { secrets: [secret1, secret2], nextPageToken: '' },
+      })
+    );
+    const transport = createListSecretsTransport(listSecretsMock);
+
+    renderWithFileRoutes(<SecretsStoreListPage />, { transport });
+
+    await waitFor(() => {
+      expect(screen.getByText('gateway-secret')).toBeVisible();
+      expect(screen.getByText('mcp-secret')).toBeVisible();
+    });
+
+    // Click the "Scope" faceted filter button (not the column header one in <thead>)
+    const scopeFilterButton = screen.getAllByRole('button', { name: /scope/i }).find((btn) => !btn.closest('thead'))!;
+    await user.click(scopeFilterButton);
+
+    // Select the "MCP Server" option from the filter popover
+    const mcpOption = await screen.findByRole('option', { name: /mcp server/i });
+    await user.click(mcpOption);
+
+    // Only the MCP-scoped secret should remain visible
+    await waitFor(() => {
+      expect(screen.getByText('mcp-secret')).toBeVisible();
+      expect(screen.queryByText('gateway-secret')).not.toBeInTheDocument();
     });
   });
 });

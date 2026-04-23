@@ -8,6 +8,7 @@
  * by the Apache License, Version 2.0
  */
 
+import type { LintHint } from '@buf/redpandadata_common.bufbuild_es/redpanda/api/common/v1/linthint_pb';
 import { Button } from 'components/redpanda-ui/components/button';
 import { Card, CardContent } from 'components/redpanda-ui/components/card';
 import { Field, FieldDescription, FieldError, FieldLabel } from 'components/redpanda-ui/components/field';
@@ -24,9 +25,8 @@ import { RedpandaConnectComponentTypeBadge } from 'components/ui/connect/redpand
 import { LintHintList } from 'components/ui/lint-hint/lint-hint-list';
 import { YamlEditorCard } from 'components/ui/yaml/yaml-editor-card';
 import { Trash2 } from 'lucide-react';
-import type { LintHint } from 'protogen/redpanda/api/common/v1/linthint_pb';
 import { MCPServer_Tool_ComponentType } from 'protogen/redpanda/api/dataplane/v1alpha3/mcp_pb';
-import { Controller, type UseFormReturn } from 'react-hook-form';
+import { Controller, type UseFormReturn, useWatch } from 'react-hook-form';
 
 import { applyTemplateToTool } from './form-helpers';
 import type { FormValues } from './schemas';
@@ -54,8 +54,20 @@ export const ToolCard: React.FC<ToolCardProps> = ({
   onExpand,
   onLint,
 }) => {
-  const selectedComponentType = form.watch(`tools.${toolIndex}.componentType`);
-  const templateSelectionValue = form.watch(`tools.${toolIndex}.selectedTemplate`) || '';
+  const selectedComponentType = useWatch({
+    control: form.control,
+    name: `tools.${toolIndex}.componentType`,
+  });
+  const templateSelectionValue =
+    useWatch({
+      control: form.control,
+      name: `tools.${toolIndex}.selectedTemplate`,
+    }) || '';
+  const toolConfig =
+    useWatch({
+      control: form.control,
+      name: `tools.${toolIndex}.config`,
+    }) || '';
   const componentTypeError = form.formState.errors.tools?.[toolIndex]?.componentType;
   const nameError = form.formState.errors.tools?.[toolIndex]?.name;
 
@@ -215,7 +227,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
               onLint={onLint}
               showExpand
               showLint
-              value={form.watch(`tools.${toolIndex}.config`)}
+              value={toolConfig}
             />
             <LintHintList lintHints={lintHints} />
           </div>

@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from 'components/redpanda-ui/components/dialog';
+import { DialogCloseButton } from 'components/ui/dialog-close-button';
 import { QuickAddSecrets } from 'components/ui/secret/quick-add-secrets';
 import { AlertTriangle } from 'lucide-react';
 import { Scope } from 'protogen/redpanda/api/dataplane/v1/secret_pb';
@@ -24,7 +25,7 @@ export const AddSecretsDialog = ({
   onClose: () => void;
   missingSecrets: string[];
   existingSecrets: string[];
-  onSecretsCreated: () => void;
+  onSecretsCreated: (secretNames?: string[]) => void;
   onUpdateEditorContent?: (oldName: string, newName: string) => void;
 }) => {
   const [errorMessages, setErrorMessages] = useState<string[]>([]);
@@ -33,14 +34,15 @@ export const AddSecretsDialog = ({
     setErrorMessages(errors);
   };
 
-  const handleSecretsCreated = () => {
+  const handleSecretsCreated = (names?: string[]) => {
     setErrorMessages([]);
-    onSecretsCreated();
+    onSecretsCreated(names);
   };
 
   return (
     <Dialog onOpenChange={onClose} open={isOpen}>
-      <DialogContent size="xl">
+      <DialogContent showCloseButton={false} size="xl">
+        <DialogCloseButton />
         <DialogHeader>
           <DialogTitle>Add secrets</DialogTitle>
           <DialogDescription>Add secrets to your pipeline.</DialogDescription>
@@ -59,6 +61,7 @@ export const AddSecretsDialog = ({
             </Alert>
           )}
           <QuickAddSecrets
+            cardVariant="outlined"
             enableNewSecrets
             existingSecrets={existingSecrets}
             onError={handleError}

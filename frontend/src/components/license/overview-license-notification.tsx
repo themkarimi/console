@@ -1,6 +1,5 @@
 import { Alert, AlertDescription, AlertIcon, Box, Flex, Text } from '@redpanda-data/ui';
 import { Link } from 'components/redpanda-ui/components/typography';
-import { observer } from 'mobx-react';
 import { type FC, type ReactElement, useEffect, useState } from 'react';
 
 import {
@@ -20,7 +19,7 @@ import {
 } from './license-utils';
 import { RegisterModal } from './register-modal';
 import { type License, License_Type } from '../../protogen/redpanda/api/console/v1alpha1/license_pb';
-import { api } from '../../state/backend-api';
+import { api, useApiStoreHook } from '../../state/backend-api';
 
 const getLicenseAlertContent = (
   licenses: License[],
@@ -254,7 +253,9 @@ const getLicenseAlertContent = (
   return null;
 };
 
-export const OverviewLicenseNotification: FC = observer(() => {
+export const OverviewLicenseNotification: FC = () => {
+  const licenses = useApiStoreHook((s) => s.licenses);
+  const clusterOverview = useApiStoreHook((s) => s.clusterOverview);
   const [registerModalOpen, setIsRegisterModalOpen] = useState(false);
 
   useEffect(() => {
@@ -266,14 +267,14 @@ export const OverviewLicenseNotification: FC = observer(() => {
     });
   }, []);
 
-  const trialLicenses = api.licenses.filter((license) => license.type === License_Type.TRIAL);
+  const trialLicenses = licenses.filter((license) => license.type === License_Type.TRIAL);
 
   const alertContent = getLicenseAlertContent(trialLicenses, () => {
     setIsRegisterModalOpen(true);
   });
 
   // This component needs info about whether we're using Redpanda or Kafka, without fetching clusterOverview first, we might get a malformed result
-  if (api.clusterOverview === null) {
+  if (clusterOverview === null) {
     return null;
   }
 
@@ -297,4 +298,4 @@ export const OverviewLicenseNotification: FC = observer(() => {
       <RegisterModal isOpen={registerModalOpen} onClose={() => setIsRegisterModalOpen(false)} />
     </Box>
   );
-});
+};

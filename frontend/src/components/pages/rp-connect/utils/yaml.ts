@@ -1,11 +1,69 @@
 import { ConnectError } from '@connectrpc/connect';
 import { toast } from 'sonner';
 import { formatToastErrorMessageGRPC } from 'utils/toast.utils';
-import { Document, parseDocument, stringify as yamlStringify } from 'yaml';
+import { Document, parseDocument, parse as parseYaml, stringify as yamlStringify } from 'yaml';
 
 import { schemaToConfig } from './schema';
-// import { HANDLED_ARRAY_MERGE_PATHS } from '../types/constants';
+import { convertToScreamingSnakeCase, getSecretSyntax } from '../types/constants';
 import type { ConnectComponentSpec, ConnectConfigObject, RawFieldSpec } from '../types/schema';
+
+// ============================================================================
+// Shared pure YAML helpers (moved from yaml-parsing.ts)
+// ============================================================================
+
+/** Keys that appear as siblings to the actual component name (e.g. `label`). */
+const RESERVED_COMPONENT_KEYS = new Set(['label']);
+
+/** Extract the component name from an object, skipping reserved metadata keys like `label`. */
+export const firstKey = (obj: unknown): string | undefined => {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+    return;
+  }
+  return Object.keys(obj).find((k) => !RESERVED_COMPONENT_KEYS.has(k));
+};
+
+/** Alias used within this file. */
+const componentName = firstKey;
+
+/** Extract child input names from a multi-input component (broker, sequence). */
+export const parseMultiInputs = (inputKey: string, value: unknown): string[] | undefined => {
+  if (
+    (inputKey === 'broker' || inputKey === 'sequence') &&
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    'inputs' in value
+  ) {
+    const items = (value as { inputs?: unknown[] }).inputs;
+    if (Array.isArray(items)) {
+      return items.map(firstKey).filter((k): k is string => !!k);
+    }
+  }
+  return;
+};
+
+/** Extract child output names from a multi-output component (broker, switch, fallback). */
+export const parseMultiOutputs = (outputKey: string, value: unknown): string[] | undefined => {
+  if (outputKey === 'broker' && value && typeof value === 'object' && !Array.isArray(value) && 'outputs' in value) {
+    const items = (value as { outputs?: unknown[] }).outputs;
+    if (Array.isArray(items)) {
+      return items.map(firstKey).filter((k): k is string => !!k);
+    }
+  }
+
+  if (outputKey === 'switch' && value && typeof value === 'object' && !Array.isArray(value) && 'cases' in value) {
+    const cases = (value as { cases?: { output?: unknown }[] }).cases;
+    if (Array.isArray(cases)) {
+      return cases.map((c) => firstKey(c.output)).filter((k): k is string => !!k);
+    }
+  }
+
+  if (outputKey === 'fallback' && Array.isArray(value)) {
+    return value.map(firstKey).filter((k): k is string => !!k);
+  }
+
+  return;
+};
 
 const mergeProcessor = (doc: Document.Parsed, newConfigObject: Partial<ConnectConfigObject>): void => {
   const processorsNode = doc.getIn(['pipeline', 'processors']) as { toJSON?: () => unknown } | undefined;
@@ -156,49 +214,6 @@ const detectComponentType = (
   return 'unknown';
 };
 
-// const findUnhandledArrayMergePaths = (
-//   newConfigObject: Partial<ConnectConfigObject>,
-//   doc: Document.Parsed
-// ): string[] => {
-//   const unhandled: string[] = [];
-
-//   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Nested traversal needed to surface unsupported array merges.
-//   const visit = (node: unknown, path: string[]) => {
-//     if (!node || typeof node !== 'object' || Array.isArray(node)) {
-//       return;
-//     }
-
-//     for (const [key, value] of Object.entries(node)) {
-//       const nextPath = [...path, key];
-
-//       if (Array.isArray(value)) {
-//         const normalizedPath = nextPath.join('.');
-//         if (!HANDLED_ARRAY_MERGE_PATHS.includes(normalizedPath)) {
-//           const existingValue = doc.getIn(nextPath);
-//           if (existingValue !== undefined) {
-//             unhandled.push(normalizedPath);
-//           }
-//         }
-
-//         for (const item of value) {
-//           if (item && typeof item === 'object') {
-//             visit(item, nextPath);
-//           }
-//         }
-//         continue;
-//       }
-
-//       if (value && typeof value === 'object') {
-//         visit(value, nextPath);
-//       }
-//     }
-//   };
-
-//   visit(newConfigObject, []);
-
-//   return [...new Set(unhandled)];
-// };
-
 const mergeByComponentType = (
   componentType: DetectedComponentType,
   doc: Document.Parsed,
@@ -225,6 +240,14 @@ const mergeByComponentType = (
       break;
   }
 };
+
+function convertRequiredFieldSentinels(yamlString: string): string {
+  // With inline comment: `  key: __REQUIRED_FIELD__ # comment` → `  # key: comment`
+  let result = yamlString.replace(/^(\s*)([\w][\w.-]*): ['"]?__REQUIRED_FIELD__['"]?\s*#\s*(.+)$/gm, '$1# $2: $3');
+  // Without comment (fallback): `  key: __REQUIRED_FIELD__` → `  # key: Required`
+  result = result.replace(/^(\s*)([\w][\w.-]*): ['"]?__REQUIRED_FIELD__['"]?\s*$/gm, '$1# $2: Required');
+  return result;
+}
 
 const keyMatchRegex = /^([^:#\n]+):/;
 
@@ -359,7 +382,7 @@ function addCommentsFromSpec(doc: Document.Parsed | Document, componentSpec: Con
     return;
   }
 
-  const componentName = componentSpec.name;
+  const specName = componentSpec.name;
   let configPath: string[] = [];
 
   switch (componentSpec.type) {
@@ -368,19 +391,19 @@ function addCommentsFromSpec(doc: Document.Parsed | Document, componentSpec: Con
     case 'buffer':
     case 'metrics':
     case 'tracer':
-      configPath = [componentSpec.type, componentName];
+      configPath = [componentSpec.type, specName];
       break;
     case 'processor':
-      configPath = ['pipeline', 'processors', '0', componentName];
+      configPath = ['pipeline', 'processors', '0', specName];
       break;
     case 'cache':
     case 'rate_limit': {
       const resourceKey = componentSpec.type === 'cache' ? 'cache_resources' : 'rate_limit_resources';
-      configPath = [resourceKey, '0', componentName];
+      configPath = [resourceKey, '0', specName];
       break;
     }
     case 'scanner':
-      configPath = [componentName];
+      configPath = [specName];
       break;
     default:
       return;
@@ -436,6 +459,7 @@ export const configToYaml = (
     }
 
     let yamlString = yamlStringify(doc, yamlConfig);
+    yamlString = convertRequiredFieldSentinels(yamlString);
     yamlString = addRootSpacing(yamlString);
     return yamlString;
   } catch (error) {
@@ -457,14 +481,12 @@ export const getConnectTemplate = ({
   connectionName,
   connectionType,
   components,
-  showOptionalFields,
   showAdvancedFields,
   existingYaml,
 }: {
   connectionName: string;
   connectionType: string;
   components: ConnectComponentSpec[];
-  showOptionalFields?: boolean;
   showAdvancedFields?: boolean;
   existingYaml?: string;
 }) => {
@@ -486,7 +508,7 @@ export const getConnectTemplate = ({
   }
 
   // Phase 1: Generate config object for new component
-  const result = schemaToConfig(componentSpec, showOptionalFields, showAdvancedFields);
+  const result = schemaToConfig(componentSpec, showAdvancedFields);
   if (!result) {
     return;
   }
@@ -514,3 +536,426 @@ export const getConnectTemplate = ({
 
   return configToYaml(newConfigObject, spec);
 };
+
+// ============================================================================
+// Config Component Parsing (used by pipeline list)
+// ============================================================================
+
+type ParsedYamlConfig = {
+  input?: Record<string, unknown>;
+  output?: Record<string, unknown>;
+  pipeline?: { processors?: Record<string, unknown>[] };
+};
+
+type ParsedConfigComponents = {
+  inputs: string[];
+  processors: string[];
+  outputs: string[];
+};
+
+/** Parse a pipeline's configYaml to extract input, processor, and output component names. */
+export const parseConfigComponents = (configYaml: string): ParsedConfigComponents => {
+  const empty: ParsedConfigComponents = { inputs: [], processors: [], outputs: [] };
+  if (!configYaml) {
+    return empty;
+  }
+
+  try {
+    const config = parseYaml(configYaml) as ParsedYamlConfig | null;
+    if (!config) {
+      return empty;
+    }
+
+    const processors = Array.isArray(config.pipeline?.processors)
+      ? config.pipeline.processors.map(componentName).filter((p): p is string => !!p)
+      : [];
+
+    const inputObj = config.input;
+    let inputs: string[] = [];
+    if (inputObj && typeof inputObj === 'object') {
+      const inputKey = componentName(inputObj);
+      if (inputKey) {
+        inputs = parseMultiInputs(inputKey, inputObj[inputKey]) ?? [inputKey];
+      }
+    }
+
+    const outputObj = config.output;
+    let outputs: string[] = [];
+    if (outputObj && typeof outputObj === 'object') {
+      const outputKey = componentName(outputObj);
+      if (outputKey) {
+        outputs = parseMultiOutputs(outputKey, outputObj[outputKey]) ?? [outputKey];
+      }
+    }
+
+    return { inputs, processors, outputs };
+  } catch {
+    return empty;
+  }
+};
+
+// ============================================================================
+// Topic extraction (for connectors display)
+// ============================================================================
+
+// ============================================================================
+// Surgical YAML patching for Redpanda components
+// ============================================================================
+
+export type RedpandaPatch = {
+  topicName?: string;
+  sasl?: { mechanism: string; username: string; password: string }[];
+};
+
+export type RedpandaSetupResultLike = {
+  topicName?: string;
+  username?: string;
+  saslMechanism?: string;
+  authMethod?: 'sasl' | 'service-account';
+  serviceAccountSecretName?: string;
+};
+
+/** Build a SASL patch array from setup result data. */
+export function buildSaslPatch(result: RedpandaSetupResultLike): RedpandaPatch['sasl'] | undefined {
+  if (result.authMethod === 'service-account' && result.serviceAccountSecretName) {
+    return [
+      {
+        mechanism: 'SCRAM-SHA-256',
+        username: getSecretSyntax(`${result.serviceAccountSecretName}.client_id`),
+        password: getSecretSyntax(`${result.serviceAccountSecretName}.client_secret`),
+      },
+    ];
+  }
+  if (result.username) {
+    const usernameSecretId = `KAFKA_USER_${convertToScreamingSnakeCase(result.username)}`;
+    const passwordSecretId = `KAFKA_PASSWORD_${convertToScreamingSnakeCase(result.username)}`;
+    return [
+      {
+        mechanism: result.saslMechanism || 'SCRAM-SHA-256',
+        username: getSecretSyntax(usernameSecretId),
+        password: getSecretSyntax(passwordSecretId),
+      },
+    ];
+  }
+  return;
+}
+
+/**
+ * Surgically patches topic and/or SASL fields in an existing YAML config
+ * without regenerating the entire component block.
+ *
+ * - Topics: sets `topics: [topicName]` or `topic: topicName` depending on which
+ *   field already exists in the component config. Defaults to `topics` array.
+ * - SASL: for `redpanda_common`, patches `redpanda.sasl` at root level.
+ *   For all other components, patches `[section].componentName.sasl`.
+ *
+ * Returns the patched YAML string, or undefined if parsing fails.
+ */
+/**
+ * Remove commented-out lines for keys that have just been patched.
+ * E.g. if `topics` was patched, strip `# topics: Required - ...` so the
+ * user doesn't see both the comment placeholder and the real value.
+ */
+function stripCommentedKeys(yaml: string, keys: string[], section: string, componentName: string): string {
+  if (keys.length === 0) {
+    return yaml;
+  }
+
+  const lines = yaml.split('\n');
+  const keyPattern = keys.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const commentRegex = new RegExp(`^\\s*#\\s*(?:${keyPattern}):.*$`);
+
+  // Find the section start (e.g., `input:`)
+  const sectionRegex = new RegExp(`^${section}:`);
+  const sectionStart = lines.findIndex((l) => sectionRegex.test(l));
+  if (sectionStart === -1) return yaml;
+
+  // Find the specific component within the section (e.g., `  kafka_franz:`)
+  const componentRegex = new RegExp(`^  ${componentName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:`);
+  let componentStart = -1;
+  for (let i = sectionStart + 1; i < lines.length; i++) {
+    // Stop if we hit another top-level key (left the section)
+    if (lines[i].length > 0 && !lines[i].startsWith(' ') && !lines[i].startsWith('#')) break;
+    if (componentRegex.test(lines[i])) {
+      componentStart = i;
+      break;
+    }
+  }
+  if (componentStart === -1) return yaml;
+
+  // Component block ends at the next sibling at the same indent level (2-space indent)
+  let componentEnd = lines.length;
+  for (let i = componentStart + 1; i < lines.length; i++) {
+    const line = lines[i];
+    // Stop at next top-level key or next sibling component (2-space indent, non-comment, non-empty)
+    if (line.length > 0 && !line.startsWith(' ') && !line.startsWith('#')) {
+      componentEnd = i;
+      break;
+    }
+    if (line.length > 0 && line.startsWith('  ') && !line.startsWith('    ') && !line.startsWith('  #')) {
+      componentEnd = i;
+      break;
+    }
+  }
+
+  return lines
+    .filter((line, i) => {
+      if (i <= componentStart || i >= componentEnd) return true;
+      return !commentRegex.test(line);
+    })
+    .join('\n');
+}
+
+export function patchRedpandaConfig(
+  existingYaml: string,
+  section: 'input' | 'output',
+  componentName: string,
+  patch: RedpandaPatch
+): string | undefined {
+  if (!existingYaml.trim()) {
+    return;
+  }
+
+  let doc: Document.Parsed;
+  try {
+    doc = parseDocument(existingYaml);
+  } catch {
+    return;
+  }
+
+  const patchedKeys: string[] = [];
+
+  if (patch.topicName) {
+    // Inputs use `topics` (string array), outputs use `topic` (singular string) —
+    // matches the actual Redpanda component schemas.
+    if (section === 'output') {
+      doc.setIn([section, componentName, 'topic'], patch.topicName);
+      patchedKeys.push('topic');
+    } else {
+      doc.setIn([section, componentName, 'topics'], [patch.topicName]);
+      patchedKeys.push('topics');
+    }
+  }
+
+  if (patch.sasl) {
+    if (componentName === 'redpanda_common') {
+      // redpanda_common uses a top-level `redpanda:` block for SASL
+      doc.setIn(['redpanda', 'sasl'], patch.sasl);
+    } else {
+      doc.setIn([section, componentName, 'sasl'], patch.sasl);
+    }
+    patchedKeys.push('sasl');
+  }
+
+  try {
+    const result = yamlStringify(doc, yamlConfig);
+    return stripCommentedKeys(result, patchedKeys, section, componentName);
+  } catch {
+    return;
+  }
+}
+
+/** Build a RedpandaPatch and apply it to existing YAML. Returns patched YAML or undefined. */
+export function tryPatchRedpandaYaml(
+  yamlContent: string,
+  section: 'input' | 'output',
+  componentName: string,
+  result: RedpandaSetupResultLike
+): string | undefined {
+  const patch: RedpandaPatch = {};
+  if (result.topicName) {
+    patch.topicName = result.topicName;
+  }
+  const sasl = buildSaslPatch(result);
+  if (sasl) {
+    patch.sasl = sasl;
+  }
+  if (!(patch.topicName || patch.sasl)) {
+    return;
+  }
+  return patchRedpandaConfig(yamlContent, section, componentName, patch);
+}
+
+/**
+ * Extract topic(s) configured on a Redpanda connector from YAML.
+ * Works for all Redpanda component types — topics are always at
+ * `[section].[componentName].topics[]` (inputs) or `.topic` (outputs).
+ */
+export function extractConnectorTopics(
+  yamlContent: string,
+  section: 'input' | 'output',
+  componentName: string
+): { topics: string[] | undefined; parseError: boolean } {
+  if (!yamlContent.trim()) {
+    return { topics: undefined, parseError: false };
+  }
+
+  let doc: Document.Parsed;
+  try {
+    doc = parseDocument(yamlContent);
+  } catch {
+    return { topics: undefined, parseError: true };
+  }
+
+  const topicsNode = doc.getIn([section, componentName, 'topics']);
+  // doc.getIn returns a YAMLSeq node for sequences, not a plain JS array — convert first
+  const topics =
+    topicsNode != null && typeof topicsNode === 'object' && 'toJSON' in topicsNode
+      ? (topicsNode as { toJSON(): unknown }).toJSON()
+      : topicsNode;
+  if (Array.isArray(topics)) {
+    const filtered = topics.filter((t): t is string => typeof t === 'string' && t !== '');
+    return { topics: filtered.length > 0 ? filtered : undefined, parseError: false };
+  }
+
+  const topic = doc.getIn([section, componentName, 'topic']);
+  if (typeof topic === 'string' && topic !== '') {
+    return { topics: [topic], parseError: false };
+  }
+
+  return { topics: undefined, parseError: false };
+}
+
+/** Check whether a component already has an entry under [section][componentName] in the YAML. */
+function componentExistsInYaml(yamlContent: string, section: string, componentName: string): boolean {
+  if (!yamlContent.trim()) {
+    return false;
+  }
+  try {
+    const doc = parseDocument(yamlContent);
+    return doc.getIn([section, componentName]) != null;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Apply Redpanda setup result to YAML.
+ *
+ * - If the component already exists in the YAML, surgically patches only the
+ *   requested fields (topic / SASL) without touching anything else.
+ * - If the component is new (not yet in the YAML), generates a full template
+ *   via getConnectTemplate and then patches topic/user onto it.
+ */
+export function applyRedpandaSetup({
+  yamlContent,
+  connectionName,
+  connectionType,
+  result,
+  components,
+}: {
+  yamlContent: string;
+  connectionName: string;
+  connectionType: 'input' | 'output';
+  result: RedpandaSetupResultLike;
+  components: ConnectComponentSpec[];
+}): string | undefined {
+  // Only try surgical patch if the component already exists (Flow B — hint buttons).
+  // For new components (Flow A — picker), skip to template generation.
+  if (componentExistsInYaml(yamlContent, connectionType, connectionName)) {
+    const patched = tryPatchRedpandaYaml(yamlContent, connectionType, connectionName, result);
+    if (patched) {
+      return patched;
+    }
+  }
+
+  // Generate full template, then patch topic/user onto it
+  const base = getConnectTemplate({
+    connectionName,
+    connectionType,
+    components,
+    showAdvancedFields: false,
+    existingYaml: yamlContent,
+  });
+  if (!base) {
+    return;
+  }
+
+  return tryPatchRedpandaYaml(base, connectionType, connectionName, result) ?? base;
+}
+
+/** Extract all referenced topic names from input/output configs. */
+export function extractAllTopics(yamlContent: string): string[] {
+  if (!yamlContent.trim()) {
+    return [];
+  }
+
+  let config: Record<string, unknown>;
+  try {
+    config = parseYaml(yamlContent) as Record<string, unknown>;
+  } catch {
+    return [];
+  }
+
+  if (!config) {
+    return [];
+  }
+
+  const topics = new Set<string>();
+
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: recursive tree walker
+  function walkForTopics(obj: unknown): void {
+    if (!obj || typeof obj !== 'object') {
+      return;
+    }
+
+    if (Array.isArray(obj)) {
+      for (const item of obj) {
+        walkForTopics(item);
+      }
+      return;
+    }
+
+    const record = obj as Record<string, unknown>;
+    for (const [key, value] of Object.entries(record)) {
+      if ((key === 'topic' || key === 'topics') && typeof value === 'string' && value) {
+        topics.add(value);
+      } else if (key === 'topics' && Array.isArray(value)) {
+        for (const t of value) {
+          if (typeof t === 'string' && t) {
+            topics.add(t);
+          }
+        }
+      } else {
+        walkForTopics(value);
+      }
+    }
+  }
+
+  walkForTopics(config);
+  return [...topics];
+}
+
+/**
+ * Generates YAML from onboarding wizard connection data by composing
+ * input and (optionally) output templates via getConnectTemplate.
+ */
+export function generateYamlFromWizardData(
+  input: { connectionName: string; connectionType: string } | undefined,
+  output: { connectionName: string; connectionType: string } | undefined,
+  components: ConnectComponentSpec[]
+): string {
+  if (!(input?.connectionName && input?.connectionType)) {
+    return '';
+  }
+
+  let yaml =
+    getConnectTemplate({
+      connectionName: input.connectionName,
+      connectionType: input.connectionType,
+      components,
+      existingYaml: '',
+    }) || '';
+
+  if (output?.connectionName && output?.connectionType) {
+    yaml =
+      getConnectTemplate({
+        connectionName: output.connectionName,
+        connectionType: output.connectionType,
+        components,
+        existingYaml: yaml,
+      }) || yaml;
+  }
+
+  return yaml;
+}

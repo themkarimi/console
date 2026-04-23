@@ -23,6 +23,7 @@ import {
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
+  type PaginationState,
   type SortingState,
   type Table as TanstackTable,
   useReactTable,
@@ -39,13 +40,13 @@ import { Input } from 'components/redpanda-ui/components/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from 'components/redpanda-ui/components/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from 'components/redpanda-ui/components/tooltip';
 import { Heading, Text } from 'components/redpanda-ui/components/typography';
+import { config } from 'config';
 import { AlertCircle, Check, Loader2, Pause } from 'lucide-react';
-import { runInAction } from 'mobx';
 import type { AIAgent as APIAIAgent } from 'protogen/redpanda/api/dataplane/v1alpha3/ai_agent_pb';
 import { AIAgent_State } from 'protogen/redpanda/api/dataplane/v1alpha3/ai_agent_pb';
 import React, { useCallback, useEffect } from 'react';
 import { useDeleteAIAgentMutation, useListAIAgentsQuery } from 'react-query/api/ai-agent';
-import { useListMCPServersQuery } from 'react-query/api/remote-mcp';
+import { useListAigwMCPServersQuery } from 'react-query/api/aigw/mcp-servers';
 import { useDeleteSecretMutation } from 'react-query/api/secret';
 import { toast } from 'sonner';
 import { uiState } from 'state/ui-state';
@@ -69,7 +70,7 @@ export type AIAgent = {
   description: string;
   state: AIAgent_State;
   model: string;
-  providerType: 'openai' | 'anthropic' | 'google' | 'openaiCompatible';
+  providerType: 'openai' | 'anthropic' | 'google' | 'openaiCompatible' | 'bedrock';
   url?: string;
   mcpServers: Record<string, { id: string }>;
   tags: Record<string, string>;
@@ -268,14 +269,12 @@ function AIAgentDataTableToolbar({ table }: { table: TanstackTable<AIAgent> }) {
 
 // Hack for MobX to ensure we don't need to use observables
 export const updatePageTitle = () => {
-  runInAction(() => {
-    uiState.pageTitle = 'AI Agents';
-    uiState.pageBreadcrumbs.pop(); // Remove last breadcrumb to ensure the title is used without previous page breadcrumb being shown
-    uiState.pageBreadcrumbs.push({
-      title: 'AI Agents',
-      linkTo: '/agents',
-      heading: 'AI Agents',
-    });
+  uiState.pageTitle = 'AI Agents';
+  uiState.pageBreadcrumbs.pop(); // Remove last breadcrumb to ensure the title is used without previous page breadcrumb being shown
+  uiState.pageBreadcrumbs.push({
+    title: 'AI Agents',
+    linkTo: '/agents',
+    heading: 'AI Agents',
   });
 };
 
@@ -288,11 +287,12 @@ const AIAgentsListPageContent = ({
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+  const [pagination, setPagination] = React.useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
   const [rowSelection, setRowSelection] = React.useState({});
 
   // React Query hooks
   const { data: aiAgentsData, isLoading, error } = useListAIAgentsQuery({});
-  const { data: mcpServersData } = useListMCPServersQuery();
+  const { data: mcpServersData } = useListAigwMCPServersQuery(undefined, { enabled: !!config.aigwUrl });
   const { mutateAsync: deleteAIAgent, isPending: isDeletingAgent } = useDeleteAIAgentMutation();
   const { mutateAsync: deleteSecret } = useDeleteSecretMutation({
     skipInvalidation: true,
@@ -338,14 +338,14 @@ const AIAgentsListPageContent = ({
   // Transform API data to component format
   const aiAgents = React.useMemo(() => aiAgentsData?.aiAgents?.map(transformAPIAIAgent) || [], [aiAgentsData]);
 
-  // Build a map of MCP server ID -> { name, tools }
+  // Build a map of MCP server name -> { name, tools }
   const mcpServersMap = React.useMemo(() => {
     const map = new Map<string, { name: string; tools: string[] }>();
     if (mcpServersData?.mcpServers) {
       for (const server of mcpServersData.mcpServers) {
-        map.set(server.id, {
-          name: server.displayName,
-          tools: Object.keys(server.tools || {}),
+        map.set(server.name, {
+          name: server.name,
+          tools: (server.tools ?? []).map((tool) => tool.name),
         });
       }
     }
@@ -391,17 +391,14 @@ const AIAgentsListPageContent = ({
     getFilteredRowModel: getFilteredRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
+    onPaginationChange: setPagination,
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
-    initialState: {
-      pagination: {
-        pageSize: 10,
-      },
-    },
     state: {
       sorting,
       columnFilters,
       columnVisibility,
+      pagination,
       rowSelection,
     },
   });

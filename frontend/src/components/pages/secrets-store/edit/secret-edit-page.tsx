@@ -30,7 +30,6 @@ import {
 import { Heading, Text } from 'components/redpanda-ui/components/typography';
 import { TagsFieldList } from 'components/ui/tag/tags-field-list';
 import { AlertCircle, Loader2 } from 'lucide-react';
-import { runInAction } from 'mobx';
 import { UpdateSecretRequestSchema } from 'protogen/redpanda/api/dataplane/v1/secret_pb';
 import { useEffect } from 'react';
 import { Controller, useFieldArray, useForm } from 'react-hook-form';
@@ -73,29 +72,25 @@ export const SecretEditPage = () => {
   });
 
   useEffect(() => {
-    if (secret) {
-      const existingLabels = secret.labels
-        ? Object.entries(secret.labels)
-            .filter(([key, value]) => !(key === 'owner' && value === 'console'))
-            .map(([key, value]) => ({ key, value }))
-        : [];
+    const existingLabels = secret?.labels
+      ? Object.entries(secret.labels)
+          .filter(([key, value]) => !(key === 'owner' && value === 'console'))
+          .map(([key, value]) => ({ key, value }))
+      : [];
 
-      form.reset({
-        id: secret.id,
-        value: '',
-        scopes: secret.scopes,
-        labels: existingLabels.length > 0 ? existingLabels : [],
-      });
-    }
+    form.reset({
+      id: secret?.id ?? '',
+      value: '',
+      scopes: secret?.scopes ?? [],
+      labels: existingLabels,
+    });
   }, [secret, form]);
 
   useEffect(() => {
-    runInAction(() => {
-      uiState.pageTitle = 'Edit Secret';
-      uiState.pageBreadcrumbs.pop();
-      uiState.pageBreadcrumbs.push({ title: 'Secrets Store', linkTo: '/secrets' });
-      uiState.pageBreadcrumbs.push({ title: 'Edit', linkTo: `/secrets/${id}/edit` });
-    });
+    uiState.pageTitle = 'Edit Secret';
+    uiState.pageBreadcrumbs.pop();
+    uiState.pageBreadcrumbs.push({ title: 'Secrets Store', linkTo: '/secrets' });
+    uiState.pageBreadcrumbs.push({ title: 'Edit', linkTo: `/secrets/${id}/edit` });
   }, [id]);
 
   const onSubmit = async (values: SecretUpdateFormValues) => {
@@ -196,6 +191,7 @@ export const SecretEditPage = () => {
             <Field data-invalid={fieldState.invalid}>
               <FieldLabel required>Scopes</FieldLabel>
               <MultiSelect
+                items={SCOPE_OPTIONS}
                 onValueChange={(values) => field.onChange(values.map(Number))}
                 value={field.value.map(String)}
               >
@@ -205,8 +201,11 @@ export const SecretEditPage = () => {
                 <MultiSelectContent>
                   <MultiSelectList>
                     {SCOPE_OPTIONS.map((option) => (
-                      <MultiSelectItem key={option.value} {...option}>
-                        {option.label}
+                      <MultiSelectItem key={option.value} label={option.label} value={option.value}>
+                        <span className="flex items-center gap-2">
+                          <option.icon className="size-4" />
+                          {option.label}
+                        </span>
                       </MultiSelectItem>
                     ))}
                   </MultiSelectList>

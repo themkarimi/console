@@ -9,7 +9,6 @@
  * by the Apache License, Version 2.0
  */
 
-import { observer } from 'mobx-react';
 import type { FC } from 'react';
 
 import type { Topic, TopicConsumer } from '../../../state/rest-interfaces';
@@ -20,7 +19,7 @@ import { DataTable } from '@redpanda-data/ui';
 
 import usePaginationParams from '../../../hooks/use-pagination-params';
 import { appGlobal } from '../../../state/app-global';
-import { api } from '../../../state/backend-api';
+import { useApiStoreHook } from '../../../state/backend-api';
 import { uiState } from '../../../state/ui-state';
 import { onPaginationChange } from '../../../utils/pagination';
 import { editQuery } from '../../../utils/query-helper';
@@ -28,18 +27,17 @@ import { DefaultSkeleton } from '../../../utils/tsx-utils';
 
 type TopicConsumersProps = { topic: Topic };
 
-export const TopicConsumers: FC<TopicConsumersProps> = observer(({ topic }) => {
-  let consumers = api.topicConsumers.get(topic.topicName);
-  const isLoading = consumers === null;
+export const TopicConsumers: FC<TopicConsumersProps> = ({ topic }) => {
+  const rawConsumers = useApiStoreHook((s) => s.topicConsumers.get(topic.topicName));
+  const isLoading = rawConsumers === undefined;
+
+  const consumers = rawConsumers ?? [];
+
+  const paginationParams = usePaginationParams(consumers.length, uiState.topicSettings.consumerPageSize);
+
   if (isLoading) {
     return DefaultSkeleton;
   }
-  if (!consumers) {
-    consumers = [];
-  }
-
-  // biome-ignore lint/correctness/useHookAtTopLevel: part of TopicConsumers implementation
-  const paginationParams = usePaginationParams(consumers.length, uiState.topicSettings.consumerPageSize);
 
   return (
     <DataTable<TopicConsumer>
@@ -49,7 +47,7 @@ export const TopicConsumers: FC<TopicConsumersProps> = observer(({ topic }) => {
       ]}
       data={consumers}
       onPaginationChange={onPaginationChange(paginationParams, ({ pageSize, pageIndex }) => {
-        uiState.topicSettings.consumerPageSize = pageSize;
+        Object.assign(uiState.topicSettings, { consumerPageSize: pageSize });
         editQuery((query) => {
           query.page = String(pageIndex);
           query.pageSize = String(pageSize);
@@ -62,4 +60,4 @@ export const TopicConsumers: FC<TopicConsumersProps> = observer(({ topic }) => {
       sorting
     />
   );
-});
+};

@@ -20,7 +20,6 @@ import {
   VStack,
 } from '@redpanda-data/ui';
 import { CheckIcon } from 'components/icons';
-import { observer } from 'mobx-react';
 import { useState } from 'react';
 import { Controller, type SubmitHandler, useForm } from 'react-hook-form';
 import { capitalizeFirst } from 'utils/utils';
@@ -62,7 +61,7 @@ type RegisterModalProps = {
   onClose: () => void;
 };
 
-export const RegisterModal = observer(({ isOpen, onClose }: RegisterModalProps) => {
+export const RegisterModal = ({ isOpen, onClose }: RegisterModalProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSuccess, setIsSuccess] = useState(false);
@@ -87,12 +86,13 @@ export const RegisterModal = observer(({ isOpen, onClose }: RegisterModalProps) 
     setIsSubmitting(true);
     setFieldErrors({}); // Clear previous field errors
 
+    const companyName = data.companyName || 'unknown';
     try {
       await signupMutation.mutateAsync({
         givenName: data.givenName,
         familyName: data.familyName,
         email: data.email,
-        companyName: data.companyName || 'unknown',
+        companyName,
       });
 
       // Refresh licenses after successful registration
@@ -100,26 +100,27 @@ export const RegisterModal = observer(({ isOpen, onClose }: RegisterModalProps) 
 
       // Show success state
       setIsSuccess(true);
+      setIsSubmitting(false);
     } catch (error) {
+      setIsSubmitting(false);
       // Handle field-level errors from the API response
-      if (error instanceof ConnectError) {
+      const isConnectError = error instanceof ConnectError;
+      if (isConnectError) {
+        const connectError = error as ConnectError;
         const newFieldErrors: Record<string, string> = {};
-
-        for (const detail of error.details ?? []) {
+        const details = connectError.details ?? [];
+        for (const detail of details) {
           if (isBadRequest(detail)) {
             for (const violation of detail.debug.fieldViolations) {
               newFieldErrors[violation.field] = violation.description;
             }
           }
         }
-
         setFieldErrors(newFieldErrors);
       }
 
       // biome-ignore lint/suspicious/noConsole: error logging for debugging registration failures
       console.error('Registration failed:', error);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -309,4 +310,4 @@ export const RegisterModal = observer(({ isOpen, onClose }: RegisterModalProps) 
       </ModalContent>
     </Modal>
   );
-});
+};

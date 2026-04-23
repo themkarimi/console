@@ -9,9 +9,7 @@
  * by the Apache License, Version 2.0
  */
 
-import { observer } from 'mobx-react';
-
-import { api } from '../../../state/backend-api';
+import { useApiStoreHook } from '../../../state/backend-api';
 import type { ConfigEntry, Topic } from '../../../state/rest-interfaces';
 import '../../../utils/array-extensions';
 import { Box, Divider, Flex, Text, Tooltip } from '@redpanda-data/ui';
@@ -25,11 +23,11 @@ import { prettyBytesOrNA } from '../../../utils/utils';
 
 // todo: rename QuickInfo
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: complex business logic
-export const TopicQuickInfoStatistic = observer((p: { topic: Topic }) => {
+export const TopicQuickInfoStatistic = (p: { topic: Topic }) => {
   const topic = p.topic;
 
   // Messages
-  const partitions = api.topicPartitions.get(topic.topicName);
+  const partitions = useApiStoreHook((s) => s.topicPartitions.get(topic.topicName));
 
   let messageSum: ReactNode;
 
@@ -43,7 +41,7 @@ export const TopicQuickInfoStatistic = observer((p: { topic: Topic }) => {
   }
 
   // Config Entries / Separator
-  const configEntries = api.topicConfig.get(topic.topicName)?.configEntries;
+  const configEntries = useApiStoreHook((s) => s.topicConfig.get(topic.topicName))?.configEntries;
   const filteredConfigEntries = filterTopicConfig(configEntries);
   const cleanupPolicy = configEntries?.find((x) => x.name === 'cleanup.policy')?.value;
 
@@ -147,7 +145,7 @@ export const TopicQuickInfoStatistic = observer((p: { topic: Topic }) => {
       </Flex>
     </Flex>
   );
-});
+};
 
 function filterTopicConfig(config: ConfigEntry[] | null | undefined): ConfigEntry[] | null | undefined {
   if (!config) {

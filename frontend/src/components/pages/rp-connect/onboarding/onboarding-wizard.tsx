@@ -5,11 +5,9 @@ const routeApi = getRouteApi('/rp-connect/wizard');
 
 import PageContent from 'components/misc/page-content';
 import { Button } from 'components/redpanda-ui/components/button';
-import { Card, CardContent, CardHeader, CardTitle } from 'components/redpanda-ui/components/card';
+import { Card, CardContent } from 'components/redpanda-ui/components/card';
 import { Spinner } from 'components/redpanda-ui/components/spinner';
-import { Heading } from 'components/redpanda-ui/components/typography';
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
-import { runInAction } from 'mobx';
 import { AnimatePresence } from 'motion/react';
 import { ComponentSpecSchema } from 'protogen/redpanda/api/dataplane/v1/pipeline_pb';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -21,7 +19,6 @@ import {
   useOnboardingYamlContentStore,
   useResetOnboardingWizardStore,
 } from 'state/onboarding-wizard-store';
-import { uiState } from 'state/ui-state';
 import { useShallow } from 'zustand/react/shallow';
 
 import { AddTopicStep } from './add-topic-step';
@@ -145,16 +142,6 @@ export const ConnectOnboardingWizard = ({
     [WizardStep.ADD_USER]: false,
   });
 
-  useEffect(() => {
-    runInAction(() => {
-      uiState.pageTitle = 'Create Pipeline';
-      uiState.pageBreadcrumbs = [
-        { title: 'Redpanda Connect', linkTo: '/connect-clusters' },
-        { title: 'Create Pipeline', linkTo: '' },
-      ];
-    });
-  }, []);
-
   const handleSkipToCreatePipeline = (methods: WizardStepperSteps) => {
     if (methods.current.id === WizardStep.ADD_INPUT) {
       resetOnboardingWizardStore();
@@ -182,7 +169,6 @@ export const ConnectOnboardingWizard = ({
             connectionName,
             connectionType,
             components,
-            showOptionalFields: false,
             existingYaml: useOnboardingYamlContentStore.getState().yamlContent,
           });
 
@@ -232,7 +218,6 @@ export const ConnectOnboardingWizard = ({
             connectionName,
             connectionType,
             components,
-            showOptionalFields: false,
             existingYaml: useOnboardingYamlContentStore.getState().yamlContent,
           });
 
@@ -273,48 +258,40 @@ export const ConnectOnboardingWizard = ({
       }
       case WizardStep.ADD_TOPIC: {
         setIsSubmitting(true);
-        try {
-          const result = await addTopicStepRef.current?.triggerSubmit();
-          if (result?.success && result.data) {
-            setTopicData({ topicName: result.data.topicName });
-            regenerateYamlForTopicUserComponents(components);
-          }
-          handleStepResult(result, methods.next);
-        } finally {
-          setIsSubmitting(false);
+        const topicResult = await addTopicStepRef.current?.triggerSubmit().finally(() => setIsSubmitting(false));
+        if (topicResult?.success && topicResult.data) {
+          setTopicData({ topicName: topicResult.data.topicName });
+          regenerateYamlForTopicUserComponents(components);
         }
+        handleStepResult(topicResult, methods.next);
         break;
       }
       case WizardStep.ADD_USER: {
         setIsSubmitting(true);
-        try {
-          const result = await addUserStepRef.current?.triggerSubmit();
-          if (result?.success && result.data) {
-            if ('authMethod' in result.data && result.data.authMethod === 'service-account') {
-              // Service account data
-              setUserData({
-                authMethod: 'service-account',
-                username: '',
-                saslMechanism: 'SCRAM-SHA-256',
-                consumerGroup: '',
-                serviceAccountName: result.data.serviceAccountName,
-                serviceAccountId: result.data.serviceAccountId,
-                serviceAccountSecretName: result.data.serviceAccountSecretName,
-              });
-            } else if ('username' in result.data) {
-              // SASL user data
-              setUserData({
-                authMethod: 'sasl',
-                username: result.data.username,
-                saslMechanism: result.data.saslMechanism,
-                consumerGroup: result.data.consumerGroup || '',
-              });
-            }
-            regenerateYamlForTopicUserComponents(components);
-            methods.next();
+        const userResult = await addUserStepRef.current?.triggerSubmit().finally(() => setIsSubmitting(false));
+        if (userResult?.success && userResult.data) {
+          if ('authMethod' in userResult.data && userResult.data.authMethod === 'service-account') {
+            // Service account data
+            setUserData({
+              authMethod: 'service-account',
+              username: '',
+              saslMechanism: 'SCRAM-SHA-256',
+              consumerGroup: '',
+              serviceAccountName: userResult.data.serviceAccountName,
+              serviceAccountId: userResult.data.serviceAccountId,
+              serviceAccountSecretName: userResult.data.serviceAccountSecretName,
+            });
+          } else if ('username' in userResult.data) {
+            // SASL user data
+            setUserData({
+              authMethod: 'sasl',
+              username: userResult.data.username,
+              saslMechanism: userResult.data.saslMechanism,
+              consumerGroup: userResult.data.consumerGroup || '',
+            });
           }
-        } finally {
-          setIsSubmitting(false);
+          regenerateYamlForTopicUserComponents(components);
+          methods.next();
         }
         break;
       }
@@ -435,11 +412,6 @@ export const ConnectOnboardingWizard = ({
                   ),
                   [WizardStep.CREATE_CONFIG]: () => (
                     <Card key="create-config-step" size="full" {...stepMotionProps} animated>
-                      <CardHeader>
-                        <CardTitle>
-                          <Heading level={2}>Create pipeline</Heading>
-                        </CardTitle>
-                      </CardHeader>
                       <CardContent>
                         <PipelinePage />
                       </CardContent>

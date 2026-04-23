@@ -23,6 +23,7 @@ import {
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
+  type PaginationState,
   type SortingState,
   type Table as TanstackTable,
   useReactTable,
@@ -40,7 +41,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from 'c
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from 'components/redpanda-ui/components/tooltip';
 import { Heading, Text } from 'components/redpanda-ui/components/typography';
 import { AlertCircle, Check, Loader2, Pause } from 'lucide-react';
-import { runInAction } from 'mobx';
 import React, { useCallback, useEffect } from 'react';
 import {
   type MCPServer as APIMCPServer,
@@ -255,14 +255,12 @@ function MCPDataTableToolbar({ table }: { table: TanstackTable<MCPServer> }) {
 
 // Hack for MobX to ensure we don't need to use observables
 export const updatePageTitle = () => {
-  runInAction(() => {
-    uiState.pageTitle = 'Remote MCP';
-    uiState.pageBreadcrumbs.pop(); // Remove last breadcrumb to ensure the title is used without previous page breadcrumb being shown
-    uiState.pageBreadcrumbs.push({
-      title: 'Remote MCP',
-      linkTo: '/mcp-servers',
-      heading: 'Remote MCP',
-    });
+  uiState.pageTitle = 'Remote MCP';
+  uiState.pageBreadcrumbs.pop(); // Remove last breadcrumb to ensure the title is used without previous page breadcrumb being shown
+  uiState.pageBreadcrumbs.push({
+    title: 'Remote MCP',
+    linkTo: '/mcp-servers',
+    heading: 'Remote MCP',
   });
 };
 
@@ -271,6 +269,7 @@ const RemoteMCPListPageContent = ({ deleteHandlerRef }: { deleteHandlerRef: Reac
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+  const [pagination, setPagination] = React.useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
   const [rowSelection, setRowSelection] = React.useState({});
 
   // React Query hooks
@@ -357,17 +356,14 @@ const RemoteMCPListPageContent = ({ deleteHandlerRef }: { deleteHandlerRef: Reac
     getFilteredRowModel: getFilteredRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
+    onPaginationChange: setPagination,
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
-    initialState: {
-      pagination: {
-        pageSize: 10,
-      },
-    },
     state: {
       sorting,
       columnFilters,
       columnVisibility,
+      pagination,
       rowSelection,
     },
   });

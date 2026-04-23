@@ -1,5 +1,7 @@
 import { pluginModuleFederation } from '@module-federation/rsbuild-plugin';
 import { defineConfig, loadEnv } from '@rsbuild/core';
+import { pluginBabel } from '@rsbuild/plugin-babel';
+import { pluginNodePolyfill } from '@rsbuild/plugin-node-polyfill';
 import { pluginReact } from '@rsbuild/plugin-react';
 import { pluginSass } from '@rsbuild/plugin-sass';
 import { pluginSvgr } from '@rsbuild/plugin-svgr';
@@ -7,7 +9,6 @@ import { pluginYaml } from '@rsbuild/plugin-yaml';
 import { RsdoctorRspackPlugin } from '@rsdoctor/rspack-plugin';
 import { TanStackRouterRspack } from '@tanstack/router-plugin/rspack';
 import MonacoWebpackPlugin from 'monaco-editor-webpack-plugin';
-import NodePolyfillPlugin from 'node-polyfill-webpack-plugin';
 
 import { moduleFederationConfig } from './module-federation.config';
 import { HEAP_APP_ID } from './src/heap/heap.helper';
@@ -22,11 +23,43 @@ export default defineConfig({
         forceEnable: true,
       },
     }),
+    pluginBabel({
+      include: /\.(?:ts|tsx)$/,
+      babelLoaderOptions(opts) {
+        opts.plugins ??= [];
+        opts.plugins.unshift([
+          'babel-plugin-react-compiler',
+          {
+            target: '18',
+            compilationMode: 'annotation',
+            panicThreshold: 'critical_errors',
+            // In annotation mode, this still gates which files CAN be opted in.
+            // Files excluded here are ineligible even with 'use memo'.
+            sources: (filename: string) => {
+              if (filename.includes('/lib/redpanda-ui/')) {
+                return false;
+              }
+              if (filename.includes('/gen/')) {
+                return false;
+              }
+              if (filename.includes('node_modules')) {
+                return false;
+              }
+              return true;
+            },
+          },
+        ]);
+      },
+    }),
     pluginSvgr({ mixedImport: true }),
     pluginSass(),
     pluginYaml(),
     pluginModuleFederation({
       ...moduleFederationConfig,
+      dts: false,
+    }),
+    pluginNodePolyfill({
+      globals: { process: true },
     }),
   ],
   dev: {
@@ -54,19 +87,16 @@ export default defineConfig({
       credentials: true,
     },
     proxy: [
-      // AI Gateway API - proxy to separate AI Gateway service
-      // Matches: /.redpanda/api/redpanda.api.aigateway.v1.*
-      // Proto package is: redpanda.api.aigateway.v1 (includes .api)
-      // AI Gateway now expects the full path with .api
-      ...(process.env.AI_GATEWAY_URL
+      // AIGW v2 API - proxy to new AI Gateway management API (LLMProviderService, ModelService)
+      ...(process.env.AIGW_URL
         ? [
             {
-              context: ['/.redpanda/api/redpanda.api.aigateway.v1'],
-              target: process.env.AI_GATEWAY_URL,
+              context: ['/.aigw/api'],
+              target: process.env.AIGW_URL,
               changeOrigin: true,
               secure: false,
               logLevel: 'debug',
-              // No pathRewrite - AI Gateway expects full path with .api
+              pathRewrite: { '^/\\.aigw/api': '' },
             },
           ]
         : []),
@@ -87,6 +117,9 @@ export default defineConfig({
     decorators: {
       version: 'legacy',
     },
+  },
+  performance: {
+    buildCache: false,
   },
   output: {
     distPath: {
@@ -120,9 +153,6 @@ export default defineConfig({
           generatedRouteTree: './src/routeTree.gen.ts',
           quoteStyle: 'single',
           semicolons: true,
-        }),
-        new NodePolyfillPlugin({
-          additionalAliases: ['process'],
         }),
         new MonacoWebpackPlugin({
           languages: ['yaml', 'json', 'typescript', 'javascript', 'protobuf'],

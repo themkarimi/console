@@ -15,8 +15,7 @@ import ErrorResult from 'components/misc/error-result';
 import { Badge } from 'components/redpanda-ui/components/badge';
 import { Link, Text } from 'components/redpanda-ui/components/typography';
 import { WaitingRedpanda } from 'components/redpanda-ui/components/waiting-redpanda';
-import { observer, useLocalObservable } from 'mobx-react';
-import { Component, type FunctionComponent } from 'react';
+import { Component, type FunctionComponent, useCallback, useMemo, useState } from 'react';
 import { useKafkaConnectConnectorsQuery } from 'react-query/api/kafka-connect';
 
 import {
@@ -34,7 +33,7 @@ import { ListSecretScopesRequestSchema } from '../../../protogen/redpanda/api/da
 import { appGlobal } from '../../../state/app-global';
 import { api, rpcnSecretManagerApi } from '../../../state/backend-api';
 import type { ClusterConnectorInfo, ClusterConnectors, ClusterConnectorTaskInfo } from '../../../state/rest-interfaces';
-import { Features } from '../../../state/supported-features';
+import { Features, useSupportedFeaturesStore } from '../../../state/supported-features';
 import { uiSettings } from '../../../state/ui';
 import { Code, DefaultSkeleton } from '../../../utils/tsx-utils';
 import PageContent from '../../misc/page-content';
@@ -96,7 +95,11 @@ const WrapKafkaConnectOverview: FunctionComponent<{
   );
 };
 
-@observer
+const RpConnectTabContent = () => {
+  const featurePipelinesApi = useSupportedFeaturesStore((s) => s.pipelinesApi);
+  return featurePipelinesApi ? <RpConnectPipelinesList matchedPath="/rp-connect" /> : <RedpandaConnectIntro />;
+};
+
 class KafkaConnectOverview extends PageComponent<{
   defaultView: string;
   isKafkaConnectEnabled: boolean;
@@ -164,7 +167,7 @@ class KafkaConnectOverview extends PageComponent<{
                 Learn more
               </Link>
             </Text>
-            {Features.pipelinesApi ? <RpConnectPipelinesList matchedPath="/rp-connect" /> : <RedpandaConnectIntro />}
+            <RpConnectTabContent />
           </div>
         ),
       },
@@ -213,7 +216,6 @@ class KafkaConnectOverview extends PageComponent<{
 
 export default WrapKafkaConnectOverview;
 
-@observer
 class TabClusters extends Component {
   render() {
     const clusters = api.connectConnectors?.clusters;
@@ -239,13 +241,17 @@ class TabClusters extends Component {
               }
 
               return (
-                // biome-ignore lint/a11y/noStaticElementInteractions: part of TabClusters implementation
-                // biome-ignore lint/a11y/noNoninteractiveElementInteractions: legacy MobX pattern
-                // biome-ignore lint/a11y/useKeyWithClickEvents: legacy MobX pattern
                 <span
                   className="hoverLink"
                   onClick={() => appGlobal.historyPush(`/connect-clusters/${encodeURIComponent(r.clusterName)}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      appGlobal.historyPush(`/connect-clusters/${encodeURIComponent(r.clusterName)}`);
+                    }
+                  }}
+                  role="button"
                   style={{ display: 'inline-block', width: '100%' }}
+                  tabIndex={0}
                 >
                   {r.clusterName}
                 </span>
@@ -264,6 +270,7 @@ class TabClusters extends Component {
             cell: ({ row: { original } }) => <ConnectorsColumn observable={original} />,
           },
           {
+            id: 'tasks',
             accessorKey: 'connectors',
             size: 150,
             header: 'Tasks',
@@ -282,38 +289,45 @@ interface ConnectorType extends ClusterConnectorInfo {
   cluster: ClusterConnectors;
 }
 
-const TabConnectors = observer(() => {
+const TabConnectors = () => {
   const clusters = api.connectConnectors?.clusters;
-  const allConnectors: ConnectorType[] =
-    clusters?.flatMap((cluster) => cluster.connectors.map((c) => ({ cluster, ...c }))) ?? [];
+  const allConnectors: ConnectorType[] = useMemo(
+    () => clusters?.flatMap((cluster) => cluster.connectors.map((c) => ({ cluster, ...c }))) ?? [],
+    [clusters]
+  );
 
-  const state = useLocalObservable<{
-    filteredResults: ConnectorType[];
-  }>(() => ({
-    filteredResults: [],
-  }));
+  const [filteredResults, setFilteredResults] = useState<ConnectorType[]>([]);
+  const [searchText, setSearchText] = useState(uiSettings.clusterOverview.connectorsList.quickSearch);
 
-  const isFilterMatch = (filter: string, item: ConnectorType): boolean => {
+  const dataSource = useCallback(() => allConnectors, [allConnectors]);
+
+  const isFilterMatch = useCallback((filter: string, item: ConnectorType): boolean => {
     try {
-      const quickSearchRegExp = new RegExp(uiSettings.clusterOverview.connectorsList.quickSearch, 'i');
-      return Boolean(item.name.match(quickSearchRegExp)) || Boolean(item.class.match(quickSearchRegExp));
+      const quickSearchRegExp = new RegExp(filter, 'i');
+      const nameMatch = item.name.match(quickSearchRegExp) !== null;
+      const classMatch = item.class.match(quickSearchRegExp) !== null;
+      if (nameMatch) {
+        return true;
+      }
+      return classMatch;
     } catch (_e) {
       return item.name.toLowerCase().includes(filter.toLowerCase());
     }
-  };
+  }, []);
+
+  const onQueryChanged = useCallback((x: string) => {
+    setSearchText(x);
+    uiSettings.clusterOverview.connectorsList.quickSearch = x;
+  }, []);
 
   return (
     <Box>
       <SearchBar<ConnectorType>
-        dataSource={() => allConnectors}
-        filterText={uiSettings.clusterOverview.connectorsList.quickSearch}
+        dataSource={dataSource}
+        filterText={searchText}
         isFilterMatch={isFilterMatch}
-        onFilteredDataChanged={(data) => {
-          state.filteredResults = data;
-        }}
-        onQueryChanged={(x) => {
-          uiSettings.clusterOverview.connectorsList.quickSearch = x;
-        }}
+        onFilteredDataChanged={setFilteredResults}
+        onQueryChanged={onQueryChanged}
         placeholderText="Enter search term/regex"
       />
       <DataTable<ConnectorType>
@@ -324,9 +338,6 @@ const TabConnectors = observer(() => {
             size: 35, // Assuming '35%' is approximated to '35'
             cell: ({ row: { original } }) => (
               <Tooltip hasArrow={true} label={original.name} placement="top">
-                {/** biome-ignore lint/a11y/noStaticElementInteractions: part of TabConnectors implementation */}
-                {/** biome-ignore lint/a11y/noNoninteractiveElementInteractions: legacy MobX pattern */}
-                {/** biome-ignore lint/a11y/useKeyWithClickEvents: legacy MobX pattern */}
                 <span
                   className="hoverLink"
                   onClick={() =>
@@ -334,7 +345,16 @@ const TabConnectors = observer(() => {
                       `/connect-clusters/${encodeURIComponent(original.cluster.clusterName)}/${encodeURIComponent(original.name)}`
                     )
                   }
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      appGlobal.historyPush(
+                        `/connect-clusters/${encodeURIComponent(original.cluster.clusterName)}/${encodeURIComponent(original.name)}`
+                      );
+                    }
+                  }}
+                  role="button"
                   style={{ display: 'inline-block', width: '100%' }}
+                  tabIndex={0}
                 >
                   {original.name}
                 </span>
@@ -367,13 +387,13 @@ const TabConnectors = observer(() => {
             cell: ({ row: { original } }) => <Code nowrap>{original.cluster.clusterName}</Code>,
           },
         ]}
-        data={state.filteredResults}
+        data={filteredResults}
         pagination
         sorting={false}
       />
     </Box>
   );
-});
+};
 
 interface TaskType extends ClusterConnectorTaskInfo {
   connector: ConnectorType;
@@ -381,7 +401,6 @@ interface TaskType extends ClusterConnectorTaskInfo {
   connectorName: string;
 }
 
-@observer
 class TabTasks extends Component {
   render() {
     const clusters = api.connectConnectors?.clusters;
@@ -445,7 +464,7 @@ class TabTasks extends Component {
 }
 
 // biome-ignore lint/complexity/noBannedTypes: empty object represents pages with no route params
-export const TabKafkaConnect = observer((_p: {}) => {
+export const TabKafkaConnect = (_p: {}) => {
   const settings = uiSettings.kafkaConnect;
 
   if (api.connectConnectorsError) {
@@ -467,7 +486,7 @@ export const TabKafkaConnect = observer((_p: {}) => {
       </Section>
     </Stack>
   );
-});
+};
 
 export type ConnectTabKeys = 'clusters' | 'connectors' | 'tasks';
 const connectTabs: Tab[] = [

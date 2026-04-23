@@ -9,11 +9,13 @@
  * by the Apache License, Version 2.0
  */
 
-import { observer } from 'mobx-react';
-
 import KowlEditor from '../../../misc/kowl-editor';
 
-export const DebugEditor = observer((p: { observable: { jsonText: string } }) => {
+const updateJsonText = (obs: { jsonText: string }, v: string) => {
+  obs.jsonText = v;
+};
+
+export const DebugEditor = (p: { observable: { jsonText: string } }) => {
   const obs = p.observable;
 
   return (
@@ -27,11 +29,11 @@ export const DebugEditor = observer((p: { observable: { jsonText: string } }) =>
             if (!(obs.jsonText || v)) {
               return; // dont replace undefiend with empty (which would trigger our 'autorun')
             }
-            obs.jsonText = v;
+            updateJsonText(obs, v);
           }
         }}
         value={obs.jsonText}
       />
     </div>
   );
-});
+};

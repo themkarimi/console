@@ -10,9 +10,10 @@
  */
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import userEvent from '@testing-library/user-event';
 import { Form } from 'components/redpanda-ui/components/form';
-import { useForm } from 'react-hook-form';
-import { fireEvent, render, screen, waitFor } from 'test-utils';
+import { useForm, useWatch } from 'react-hook-form';
+import { render, screen, waitFor } from 'test-utils';
 
 import { TopicConfigTab } from './topic-config-tab';
 import { getDefaultProperties } from './topic-properties-config';
@@ -24,12 +25,13 @@ const TestWrapper = ({ defaultValues = initialValues }: { defaultValues?: FormVa
     defaultValues,
     mode: 'onBlur',
   });
+  const formValues = useWatch({ control: form.control });
 
   return (
     <Form {...form}>
       <form>
         <TopicConfigTab />
-        <div data-testid="form-state">{JSON.stringify(form.watch())}</div>
+        <div data-testid="form-state">{JSON.stringify(formValues)}</div>
       </form>
     </Form>
   );
@@ -38,6 +40,7 @@ const TestWrapper = ({ defaultValues = initialValues }: { defaultValues?: FormVa
 describe('TopicConfigTab', () => {
   describe('Exclude default properties toggle', () => {
     test('should remove default properties from topicProperties when excludeDefault is enabled', async () => {
+      const user = userEvent.setup();
       const defaultProps = getDefaultProperties();
       const customValues: FormValues = {
         ...initialValues,
@@ -51,7 +54,7 @@ describe('TopicConfigTab', () => {
       expect(toggle).not.toBeChecked();
 
       // Enable exclude default
-      fireEvent.click(toggle);
+      await user.click(toggle);
 
       await waitFor(() => {
         expect(toggle).toBeChecked();
@@ -68,6 +71,7 @@ describe('TopicConfigTab', () => {
     });
 
     test('should add default properties to topicProperties when excludeDefault is disabled', async () => {
+      const user = userEvent.setup();
       const customValues: FormValues = {
         ...initialValues,
         excludeDefault: true,
@@ -80,7 +84,7 @@ describe('TopicConfigTab', () => {
       expect(toggle).toBeChecked();
 
       // Disable exclude default
-      fireEvent.click(toggle);
+      await user.click(toggle);
 
       await waitFor(() => {
         expect(toggle).not.toBeChecked();

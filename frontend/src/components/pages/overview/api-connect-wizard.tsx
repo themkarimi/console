@@ -1,6 +1,6 @@
 import { TransportProvider } from '@connectrpc/connect-query';
 import { Markdown } from '@redpanda-data/ui';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, useRouter } from '@tanstack/react-router';
 import PageContent from 'components/misc/page-content';
 import { Button } from 'components/redpanda-ui/components/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from 'components/redpanda-ui/components/card';
@@ -10,7 +10,6 @@ import { Heading } from 'components/redpanda-ui/components/typography';
 import { config } from 'config';
 import { useControlplaneTransport } from 'hooks/use-controlplane-transport';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
-import { runInAction } from 'mobx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useGetOnboardingCodeSnippetQuery } from 'react-query/api/onboarding';
 import { useGetServerlessClusterQuery } from 'react-query/api/serverless';
@@ -126,6 +125,7 @@ const HowToConnectStep = ({ topicName, username, saslMechanism }: HowToConnectPr
 
 export const APIConnectWizard = () => {
   const navigate = useNavigate();
+  const router = useRouter();
   const { reset: resetApiWizardStore } = useAPIWizardStore();
   const [topicName, setTopicName] = useState<string | undefined>(undefined);
   const [username, setUsername] = useState<string | undefined>(undefined);
@@ -140,31 +140,23 @@ export const APIConnectWizard = () => {
     switch (methods.current.id) {
       case APIWizardStep.ADD_TOPIC: {
         setIsSubmitting(true);
-        try {
-          const result = await addTopicStepRef.current?.triggerSubmit();
-          if (result?.success) {
-            setTopicName(result.data?.topicName);
-          }
-          handleStepResult(result, methods.next);
-        } finally {
-          setIsSubmitting(false);
+        const topicResult = await addTopicStepRef.current?.triggerSubmit().finally(() => setIsSubmitting(false));
+        if (topicResult?.success) {
+          setTopicName(topicResult.data?.topicName);
         }
+        handleStepResult(topicResult, methods.next);
         break;
       }
       case APIWizardStep.ADD_USER: {
         setIsSubmitting(true);
-        try {
-          const result = await addUserStepRef.current?.triggerSubmit();
-          if (result?.success && result.data && 'username' in result.data) {
-            // SASL user data
-            setUsername(result.data.username);
-            setSaslMechanism(result.data.saslMechanism);
-          }
-          // Service account data doesn't set username/saslMechanism
-          handleStepResult(result, methods.next);
-        } finally {
-          setIsSubmitting(false);
+        const userResult = await addUserStepRef.current?.triggerSubmit().finally(() => setIsSubmitting(false));
+        if (userResult?.success && userResult.data && 'username' in userResult.data) {
+          // SASL user data
+          setUsername(userResult.data.username);
+          setSaslMechanism(userResult.data.saslMechanism);
         }
+        // Service account data doesn't set username/saslMechanism
+        handleStepResult(userResult, methods.next);
         break;
       }
       default:
@@ -178,18 +170,15 @@ export const APIConnectWizard = () => {
 
   const handleCancel = useCallback(() => {
     resetApiWizardStore();
-    navigate({ to: '/overview' });
-    window.location.reload(); // Required because we want to load Cloud UI's overview, not Console UI.
-  }, [navigate, resetApiWizardStore]);
+    router.history.back();
+  }, [router, resetApiWizardStore]);
 
   useEffect(() => {
-    runInAction(() => {
-      uiState.pageTitle = 'Connect to your cluster';
-      uiState.pageBreadcrumbs = [
-        { title: 'Cluster Overview', linkTo: '/overview' },
-        { title: 'Connect to your cluster', linkTo: '' },
-      ];
-    });
+    uiState.pageTitle = 'Connect to your cluster';
+    uiState.pageBreadcrumbs = [
+      { title: 'Cluster Overview', linkTo: '/overview' },
+      { title: 'Connect to your cluster', linkTo: '' },
+    ];
   }, []);
 
   useEffect(() => {
@@ -223,7 +212,7 @@ export const APIConnectWizard = () => {
                       of={step.id}
                       onClick={() => {
                         if (step.id === APIWizardStep.ADD_DATA) {
-                          window.location.href = '/get-started?type=input'; // Required because we want to load Cloud UI's get-started page.
+                          router.history.back();
                         } else {
                           methods.goTo(step.id);
                         }
@@ -251,7 +240,7 @@ export const APIConnectWizard = () => {
                     onClick={
                       methods.current.id === APIWizardStep.ADD_TOPIC
                         ? () => {
-                            window.location.href = '/get-started?type=input';
+                            router.history.back();
                           }
                         : methods.prev
                     }

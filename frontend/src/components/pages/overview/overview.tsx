@@ -9,9 +9,6 @@
  * by the Apache License, Version 2.0
  */
 
-import { computed, makeObservable } from 'mobx';
-import { observer } from 'mobx-react';
-
 import { appGlobal } from '../../../state/app-global';
 import { api } from '../../../state/backend-api';
 import type { BrokerWithConfigAndStorage } from '../../../state/rest-interfaces';
@@ -53,17 +50,7 @@ import { OverviewLicenseNotification } from '../../license/overview-license-noti
 import { NullFallbackBoundary } from '../../misc/null-fallback-boundary';
 import { Statistic } from '../../misc/statistic';
 
-@observer
 class Overview extends PageComponent {
-  @computed get hasRack() {
-    return api.brokers?.sum((b) => (b.rack ? 1 : 0));
-  }
-
-  constructor(p: Readonly<{ matchedPath: string }>) {
-    super(p);
-    makeObservable(this);
-  }
-
   initPage(p: PageInitHelper): void {
     p.title = 'Overview';
     p.addBreadcrumb('Overview', '/overview');
@@ -83,6 +70,9 @@ class Overview extends PageComponent {
       // Error handling managed by API layer
     });
     api.refreshDebugBundleStatuses().catch(() => {
+      // Error handling managed by API layer
+    });
+    api.listLicenses().catch(() => {
       // Error handling managed by API layer
     });
   }
@@ -215,7 +205,7 @@ class Overview extends PageComponent {
                         </Button>
                       ),
                     },
-                    ...(this.hasRack
+                    ...(api.brokers?.sum((b) => (b.rack ? 1 : 0))
                       ? [
                           {
                             size: 100,
@@ -383,7 +373,7 @@ function ClusterDetails() {
         <Details
           content={[
             [
-              <Link key={0} params={{ tab: 'users' }} to="/security/$tab">
+              <Link key={0} to="/security/users">
                 {serviceAccounts}
               </Link>,
             ],
@@ -394,7 +384,7 @@ function ClusterDetails() {
         <Details
           content={[
             [
-              <Link key={0} params={{ tab: 'acls' }} to="/security/$tab">
+              <Link key={0} to="/security/acls">
                 {aclCount}
               </Link>,
             ],

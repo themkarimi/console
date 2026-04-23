@@ -13,8 +13,6 @@ import { Box, Button, createStandaloneToast, DataTable, Flex, Image, SearchField
 import { Link } from '@tanstack/react-router';
 import { CheckIcon, CloseIcon, HelpIcon, RotateCwIcon, StopCircleIcon, TrashIcon } from 'components/icons';
 import { Button as NewButton } from 'components/redpanda-ui/components/button';
-import { makeObservable, observable } from 'mobx';
-import { observer } from 'mobx-react';
 
 import { openDeleteModal } from './modals';
 import EmptyConnectors from '../../../assets/redpanda/EmptyConnectors.svg';
@@ -55,7 +53,7 @@ const LegacyEmptyState = () => (
   </Flex>
 );
 
-export const PipelineStatus = observer((p: { status: Pipeline_State }) => {
+export const PipelineStatus = (p: { status: Pipeline_State }) => {
   switch (p.status) {
     case Pipeline_State.UNSPECIFIED:
       return (
@@ -66,49 +64,49 @@ export const PipelineStatus = observer((p: { status: Pipeline_State }) => {
     case Pipeline_State.STARTING:
       return (
         <Flex alignItems="center" gap="2">
-          <RotateCwIcon color="#444" fontSize="17px" width="auto" /> Starting
+          <RotateCwIcon color="#444" size={24} /> Starting
         </Flex>
       );
     case Pipeline_State.RUNNING:
       return (
         <Flex alignItems="center" gap="2">
-          <CheckIcon color="green" fontSize="17px" width="auto" /> Running
+          <CheckIcon color="green" size={24} /> Running
         </Flex>
       );
     case Pipeline_State.COMPLETED:
       return (
         <Flex alignItems="center" gap="2">
-          <CheckIcon color="green" fontSize="17px" width="auto" /> Completed
+          <CheckIcon color="green" size={24} /> Completed
         </Flex>
       );
     case Pipeline_State.STOPPING:
       return (
         <Flex alignItems="center" gap="2">
-          <RotateCwIcon color="#444" fontSize="17px" width="auto" /> Stopping
+          <RotateCwIcon color="#444" size={24} /> Stopping
         </Flex>
       );
     case Pipeline_State.STOPPED:
       return (
         <Flex alignItems="center" gap="2">
-          <StopCircleIcon color="#444" fontSize="17px" width="auto" /> Stopped
+          <StopCircleIcon color="#444" size={24} /> Stopped
         </Flex>
       );
     case Pipeline_State.ERROR:
       return (
         <Flex alignItems="center" gap="2">
-          <CloseIcon color="red" fontSize="17px" width="auto" /> Error
+          <CloseIcon color="red" size={24} /> Error
         </Flex>
       );
     default:
       return (
         <Flex alignItems="center" gap="2">
-          <HelpIcon color="red" fontSize="17px" width="auto" /> Unknown
+          <HelpIcon color="red" size={24} /> Unknown
         </Flex>
       );
   }
-});
+};
 
-export const PipelineThroughput = observer((p: { pipeline: Pipeline }) => {
+export const PipelineThroughput = (p: { pipeline: Pipeline }) => {
   const { resources } = p.pipeline;
   if (!resources) {
     return null;
@@ -119,18 +117,10 @@ export const PipelineThroughput = observer((p: { pipeline: Pipeline }) => {
       {resources.cpuShares} {resources.memoryShares}
     </>
   );
-});
+};
 
-@observer
 // biome-ignore lint/complexity/noBannedTypes: empty object represents pages with no route params
 class RpConnectPipelinesList extends PageComponent<{}> {
-  @observable placeholder = 5;
-
-  constructor(p: Readonly<{ matchedPath: string }>) {
-    super(p);
-    makeObservable(this);
-  }
-
   initPage(p: PageInitHelper): void {
     p.addBreadcrumb('Redpanda Connect Pipelines', '/rp-connect');
 

@@ -31,8 +31,6 @@ import {
   useDisclosure,
   useToast,
 } from '@redpanda-data/ui';
-import { comparer } from 'mobx';
-import { observer, useLocalObservable } from 'mobx-react';
 import { useEffect, useState } from 'react';
 
 import { ConnectorBoxCard, type ConnectorPlugin, getConnectorFriendlyName } from './connector-box-card';
@@ -51,165 +49,158 @@ import { SingleSelect } from '../../misc/select';
 import { Wizard, type WizardStep } from '../../misc/wizard';
 import { PageComponent, type PageInitHelper } from '../page';
 
-const ConnectorType = observer(
-  (p: {
-    connectClusters: ClusterConnectors[];
-    activeCluster: string | null;
-    onActiveClusterChange: (clusterName: string | null) => void;
-    selectedPlugin: ConnectorPlugin | null;
-    onPluginSelectionChange: (plugin: ConnectorPlugin | null) => void;
-  }) => {
-    const tabFilterModes = ['all', 'export', 'import'] as const;
-    const state = useLocalObservable(() => ({
-      textFilter: '',
-      tabFilter: 'all' as 'all' | 'export' | 'import',
-    }));
+const ConnectorType = (p: {
+  connectClusters: ClusterConnectors[];
+  activeCluster: string | null;
+  onActiveClusterChange: (clusterName: string | null) => void;
+  selectedPlugin: ConnectorPlugin | null;
+  onPluginSelectionChange: (plugin: ConnectorPlugin | null) => void;
+}) => {
+  const tabFilterModes = ['all', 'export', 'import'] as const;
+  const [textFilter, setTextFilter] = useState('');
+  const [tabFilter, setTabFilter] = useState<'all' | 'export' | 'import'>('all');
 
-    let filteredPlugins = [] as {
-      class: string;
-      type: 'sink' | 'source';
-      version?: string | undefined;
-    }[];
+  let filteredPlugins = [] as {
+    class: string;
+    type: 'sink' | 'source';
+    version?: string | undefined;
+  }[];
 
-    if (p.activeCluster) {
-      const allPlugins = api.connectAdditionalClusterInfo.get(p.activeCluster)?.plugins;
+  if (p.activeCluster) {
+    const allPlugins = api.connectAdditionalClusterInfo.get(p.activeCluster)?.plugins;
 
-      filteredPlugins =
-        // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: complexity 33, refactor later
-        allPlugins?.filter((plugin) => {
-          if (state.tabFilter === 'export' && plugin.type === 'source') {
-            return false; // not an "export" type
+    filteredPlugins =
+      // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: complexity 33, refactor later
+      allPlugins?.filter((plugin) => {
+        if (tabFilter === 'export' && plugin.type === 'source') {
+          return false; // not an "export" type
+        }
+
+        if (tabFilter === 'import' && plugin.type === 'sink') {
+          return false; // not an "import" type
+        }
+
+        const meta = findConnectorMetadata(plugin.class);
+        if (!meta) {
+          return true; // no metadata, show it always
+        }
+
+        if (textFilter) {
+          let matchesFilter = false;
+
+          if (meta.friendlyName && containsIgnoreCase(meta.friendlyName, textFilter)) {
+            matchesFilter = true;
           }
 
-          if (state.tabFilter === 'import' && plugin.type === 'sink') {
-            return false; // not an "import" type
+          if (plugin.class && containsIgnoreCase(plugin.class, textFilter)) {
+            matchesFilter = true;
           }
 
-          const meta = findConnectorMetadata(plugin.class);
-          if (!meta) {
-            return true; // no metadata, show it always
+          if (meta.description && containsIgnoreCase(meta.description, textFilter)) {
+            matchesFilter = true;
           }
 
-          if (state.textFilter) {
-            let matchesFilter = false;
-
-            if (meta.friendlyName && containsIgnoreCase(meta.friendlyName, state.textFilter)) {
-              matchesFilter = true;
-            }
-
-            if (plugin.class && containsIgnoreCase(plugin.class, state.textFilter)) {
-              matchesFilter = true;
-            }
-
-            if (meta.description && containsIgnoreCase(meta.description, state.textFilter)) {
-              matchesFilter = true;
-            }
-
-            if (!matchesFilter) {
-              return false; // doesn't match the text filter
-            }
+          if (!matchesFilter) {
+            return false; // doesn't match the text filter
           }
+        }
 
-          // no filters active that would remove the entry from the list
-          return true;
-        }) || [];
-    }
-
-    const noResultsBox =
-      filteredPlugins?.length > 0 ? null : (
-        <Flex alignItems="center" background="blackAlpha.100" borderRadius="8px" justifyContent="center" p="10">
-          <Text color="gray" fontSize="large">
-            No connectors that match the search filters
-          </Text>
-        </Flex>
-      );
-
-    return (
-      <>
-        {p.connectClusters.length > 1 && (
-          <>
-            <h2>Installation Target</h2>
-            <Box maxWidth={400}>
-              <SingleSelect<string | undefined>
-                onChange={p.onActiveClusterChange as (val: string | null | undefined) => void}
-                options={p.connectClusters.map(({ clusterName }) => ({
-                  value: clusterName,
-                  label: clusterName,
-                }))}
-                value={p.activeCluster ?? undefined}
-              />
-            </Box>
-          </>
-        )}
-
-        {Boolean(p.activeCluster) && (
-          <>
-            <Flex direction="column" gap="1em">
-              <Box maxWidth="600px">
-                <Text>
-                  Select a managed connector. Connectors simplify importing and exporting data between Redpanda and
-                  popular data sources.{' '}
-                  <Link href="https://docs.redpanda.com/docs/deploy/deployment-option/cloud/managed-connectors/">
-                    Learn more
-                  </Link>
-                </Text>
-
-                <Box marginBlock="4" marginTop="8">
-                  <SearchField
-                    icon="filter"
-                    placeholderText="Search"
-                    searchText={state.textFilter}
-                    setSearchText={(x) => {
-                      state.textFilter = x;
-                    }}
-                  />
-                </Box>
-              </Box>
-            </Flex>
-
-            <Tabs
-              items={[
-                {
-                  key: 'all',
-                  name: 'All',
-                  component: <></>,
-                },
-                {
-                  key: 'export',
-                  name: 'Export to',
-                  component: <></>,
-                },
-                {
-                  key: 'import',
-                  name: 'Import from',
-                  component: <></>,
-                },
-              ]}
-              marginBlock="2"
-              onChange={(_, key) => {
-                state.tabFilter = key as (typeof tabFilterModes)[number];
-              }}
-            />
-
-            <HiddenRadioList<ConnectorPlugin>
-              name={'connector-type'}
-              onChange={p.onPluginSelectionChange}
-              options={filteredPlugins.map((plugin) => ({
-                value: plugin,
-                render: (card) => <ConnectorBoxCard {...card} connectorPlugin={plugin} />,
-              }))}
-              value={p.selectedPlugin ?? undefined}
-            />
-
-            {noResultsBox}
-          </>
-        )}
-      </>
-    );
+        // no filters active that would remove the entry from the list
+        return true;
+      }) || [];
   }
-);
 
-@observer
+  const noResultsBox =
+    filteredPlugins?.length > 0 ? null : (
+      <Flex alignItems="center" background="blackAlpha.100" borderRadius="8px" justifyContent="center" p="10">
+        <Text color="gray" fontSize="large">
+          No connectors that match the search filters
+        </Text>
+      </Flex>
+    );
+
+  return (
+    <>
+      {p.connectClusters.length > 1 && (
+        <>
+          <h2>Installation Target</h2>
+          <Box maxWidth={400}>
+            <SingleSelect<string | undefined>
+              onChange={p.onActiveClusterChange as (val: string | null | undefined) => void}
+              options={p.connectClusters.map(({ clusterName }) => ({
+                value: clusterName,
+                label: clusterName,
+              }))}
+              value={p.activeCluster ?? undefined}
+            />
+          </Box>
+        </>
+      )}
+
+      {Boolean(p.activeCluster) && (
+        <>
+          <Flex direction="column" gap="1em">
+            <Box maxWidth="600px">
+              <Text>
+                Select a managed connector. Connectors simplify importing and exporting data between Redpanda and
+                popular data sources.{' '}
+                <Link href="https://docs.redpanda.com/docs/deploy/deployment-option/cloud/managed-connectors/">
+                  Learn more
+                </Link>
+              </Text>
+
+              <Box marginBlock="4" marginTop="8">
+                <SearchField
+                  icon="filter"
+                  placeholderText="Search"
+                  searchText={textFilter}
+                  setSearchText={setTextFilter}
+                />
+              </Box>
+            </Box>
+          </Flex>
+
+          <Tabs
+            items={[
+              {
+                key: 'all',
+                name: 'All',
+                component: <></>,
+              },
+              {
+                key: 'export',
+                name: 'Export to',
+                component: <></>,
+              },
+              {
+                key: 'import',
+                name: 'Import from',
+                component: <></>,
+              },
+            ]}
+            marginBlock="2"
+            onChange={(_, key) => {
+              setTabFilter(key as (typeof tabFilterModes)[number]);
+            }}
+          />
+
+          <HiddenRadioList<ConnectorPlugin>
+            name={'connector-type'}
+            onChange={p.onPluginSelectionChange}
+            options={filteredPlugins.map((plugin) => ({
+              value: plugin,
+              render: (card) => <ConnectorBoxCard {...card} connectorPlugin={plugin} />,
+            }))}
+            value={p.selectedPlugin ?? undefined}
+          />
+
+          {noResultsBox}
+        </>
+      )}
+    </>
+  );
+};
+
 class CreateConnector extends PageComponent<{ clusterName: string }> {
   initPage(p: PageInitHelper) {
     const clusterName = decodeURIComponent(this.props.clusterName);
@@ -254,24 +245,60 @@ type ConnectorWizardProps = {
   activeCluster: string;
 };
 
-const ConnectorWizard = observer(({ connectClusters, activeCluster }: ConnectorWizardProps) => {
+const ConnectorWizard = ({ connectClusters, activeCluster }: ConnectorWizardProps) => {
   const toast = useToast();
-  const [currentStep, setCurrentStep] = useState(0);
-  const [selectedPlugin, setSelectedPlugin] = useState<ConnectorPlugin | null>(null);
-  const [invalidValidationResult, setInvalidValidationResult] = useState<ConnectorValidationResult | null>(null);
-  const [validationFailure, setValidationFailure] = useState<unknown>(null);
-  const [creationFailure, setCreationFailure] = useState<unknown>(null);
-  const [genericFailure, setGenericFailure] = useState<Error | null>(null);
-  const [stringifiedConfig, setStringifiedConfig] = useState<string>('');
-  const [parsedUpdatedConfig, setParsedUpdatedConfig] = useState<Record<string, unknown> | null>(null);
-  const [postCondition, setPostCondition] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [connectClusterStore, setConnectClusterStore] = useState(ConnectClusterStore.getInstance(activeCluster));
+  const [wizardState, setWizardState] = useState<{
+    currentStep: number;
+    selectedPlugin: ConnectorPlugin | null;
+    invalidValidationResult: ConnectorValidationResult | null;
+    validationFailure: unknown;
+    creationFailure: unknown;
+    genericFailure: Error | null;
+  }>({
+    currentStep: 0,
+    selectedPlugin: null,
+    invalidValidationResult: null,
+    validationFailure: null,
+    creationFailure: null,
+    genericFailure: null,
+  });
+  const { currentStep, selectedPlugin, invalidValidationResult, validationFailure, creationFailure, genericFailure } =
+    wizardState;
+  const setCurrentStep = (v: number | ((n: number) => number)) =>
+    setWizardState((prev) => ({ ...prev, currentStep: typeof v === 'function' ? v(prev.currentStep) : v }));
+  const setSelectedPlugin = (v: ConnectorPlugin | null) => setWizardState((prev) => ({ ...prev, selectedPlugin: v }));
+  const setInvalidValidationResult = (v: ConnectorValidationResult | null) =>
+    setWizardState((prev) => ({ ...prev, invalidValidationResult: v }));
+  const setValidationFailure = (v: unknown) => setWizardState((prev) => ({ ...prev, validationFailure: v }));
+  const setCreationFailure = (v: unknown) => setWizardState((prev) => ({ ...prev, creationFailure: v }));
+  const setGenericFailure = (v: Error | null) => setWizardState((prev) => ({ ...prev, genericFailure: v }));
+  const [configState, setConfigState] = useState<{
+    stringifiedConfig: string;
+    parsedUpdatedConfig: Record<string, unknown> | null;
+  }>({ stringifiedConfig: '', parsedUpdatedConfig: null });
+  const { stringifiedConfig, parsedUpdatedConfig } = configState;
+  const setStringifiedConfig = (v: string) => {
+    let parsed: Record<string, unknown> | null = null;
+    try {
+      parsed = JSON.parse(v);
+    } catch {
+      // keep null
+    }
+    setConfigState({ stringifiedConfig: v, parsedUpdatedConfig: parsed });
+  };
+  const postCondition = parsedUpdatedConfig !== null;
+  const [loadingState, setLoadingState] = useState({ loading: false, isStoreInitialized: false });
+  const loading = loadingState.loading;
+  const isStoreInitialized = loadingState.isStoreInitialized;
+  const setLoading = (v: boolean) => setLoadingState((prev) => ({ ...prev, loading: v }));
+  const setIsStoreInitialized = (v: boolean) => setLoadingState((prev) => ({ ...prev, isStoreInitialized: v }));
+  const [connectClusterStore, setConnectClusterStore] = useState(() => ConnectClusterStore.getInstance(activeCluster));
   const { isOpen: isCreatingModalOpen, onOpen: openCreatingModal, onClose: closeCreatingModal } = useDisclosure();
 
   useEffect(() => {
     const init = async () => {
       await connectClusterStore.setup();
+      setIsStoreInitialized(true);
     };
     // biome-ignore lint/suspicious/noConsole: intentional console usage
     init().catch(console.error);
@@ -280,16 +307,6 @@ const ConnectorWizard = observer(({ connectClusters, activeCluster }: ConnectorW
   useEffect(() => {
     setConnectClusterStore(ConnectClusterStore.getInstance(activeCluster));
   }, [activeCluster]);
-
-  useEffect(() => {
-    try {
-      setParsedUpdatedConfig(JSON.parse(stringifiedConfig));
-    } catch (_e) {
-      setParsedUpdatedConfig(null);
-      setPostCondition(false);
-    }
-    setPostCondition(true);
-  }, [stringifiedConfig]);
 
   const clearErrors = () => {
     setCreationFailure(null);
@@ -384,7 +401,13 @@ const ConnectorWizard = observer(({ connectClusters, activeCluster }: ConnectorW
         setLoading(true);
         const connectorRef = connectClusterStore.getConnector(selectedPlugin?.class ?? '', null, undefined);
 
-        if (parsedUpdatedConfig !== null && !comparer.shallow(parsedUpdatedConfig, connectorRef?.getConfigObject())) {
+        const configObj = connectorRef?.getConfigObject() as Record<string, unknown> | undefined;
+        const isShallowEqual =
+          parsedUpdatedConfig !== null &&
+          configObj !== undefined &&
+          Object.keys(parsedUpdatedConfig).length === Object.keys(configObj).length &&
+          Object.keys(parsedUpdatedConfig).every((k) => parsedUpdatedConfig[k] === configObj[k]);
+        if (parsedUpdatedConfig !== null && !isShallowEqual) {
           connectorRef?.updateProperties(parsedUpdatedConfig);
         }
 
@@ -427,18 +450,18 @@ const ConnectorWizard = observer(({ connectClusters, activeCluster }: ConnectorW
           throw new ConnectorValidationError(String(e));
         }
 
+        const pluginClass = selectedPlugin?.class ?? '';
+        const parsedConfig = parsedUpdatedConfig ?? undefined;
+        const connectorName = propertiesObject?.name as string;
         try {
           openCreatingModal();
 
-          await connectClusterStore.createConnector(selectedPlugin?.class ?? '', parsedUpdatedConfig ?? undefined);
+          await connectClusterStore.createConnector(pluginClass, parsedConfig);
 
           // Wait a bit for the connector to appear, then navigate to it
           const maxScanTime = 10_000;
           const intervalSec = 100;
           const timer = new TimeSince();
-
-          // Get connector name from the actual config object (works in both form and JSON mode)
-          const connectorName = propertiesObject?.name as string;
 
           while (true) {
             const elapsedTime = timer.value;
@@ -467,7 +490,9 @@ const ConnectorWizard = observer(({ connectClusters, activeCluster }: ConnectorW
             status: 'success',
             description: `Connector ${connectorName} created`,
           });
+          closeCreatingModal();
         } catch (e: unknown) {
+          closeCreatingModal();
           const error = e as { name?: string; message?: string };
           switch (error?.name) {
             case 'ConnectorValidationError':
@@ -481,8 +506,6 @@ const ConnectorWizard = observer(({ connectClusters, activeCluster }: ConnectorW
           }
           setLoading(false);
           return { conditionMet: false };
-        } finally {
-          closeCreatingModal();
         }
         setLoading(false);
         return { conditionMet: true };
@@ -493,7 +516,7 @@ const ConnectorWizard = observer(({ connectClusters, activeCluster }: ConnectorW
 
   const isLast = () => currentStep === steps.length - 1;
 
-  if (!connectClusterStore.isInitialized) {
+  if (!isStoreInitialized) {
     return <Skeleton height={4} mt={5} noOfLines={20} />;
   }
 
@@ -555,7 +578,7 @@ const ConnectorWizard = observer(({ connectClusters, activeCluster }: ConnectorW
       </Modal>
     </>
   );
-});
+};
 
 function CreateConnectorHeading(p: { plugin: ConnectorPlugin | null }) {
   if (!p.plugin) {

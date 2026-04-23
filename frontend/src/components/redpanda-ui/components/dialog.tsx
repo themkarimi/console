@@ -3,7 +3,8 @@ import { X } from 'lucide-react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import React from 'react';
 
-import { cn, type SharedProps } from '../lib/utils';
+import { usePortalContainer } from '../lib/use-portal-container';
+import { cn, type FixedPositionContentProps, type SharedProps } from '../lib/utils';
 
 function Dialog({ testId, ...props }: React.ComponentProps<typeof DialogPrimitive.Root> & SharedProps) {
   return <DialogPrimitive.Root data-slot="dialog" data-testid={testId} {...props} />;
@@ -61,24 +62,26 @@ const dialogContentVariants = cva(
 interface DialogContentProps
   extends React.ComponentProps<typeof DialogPrimitive.Content>,
     VariantProps<typeof dialogContentVariants>,
-    SharedProps {
+    SharedProps,
+    Pick<FixedPositionContentProps, 'container' | 'showOverlay' | 'onOpenAutoFocus'> {
   showCloseButton?: boolean;
-  container?: Element;
 }
 
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  showOverlay = true,
   size,
   variant,
   testId,
   container,
   ...props
 }: DialogContentProps) {
+  const portalContainer = usePortalContainer();
   return (
-    <DialogPortal container={container}>
-      <DialogOverlay />
+    <DialogPortal container={container ?? portalContainer}>
+      {showOverlay ? <DialogOverlay /> : null}
       <DialogPrimitive.Content
         className={cn(dialogContentVariants({ size, variant }), className)}
         data-slot="dialog-content"
@@ -172,13 +175,20 @@ function DialogTitle({ className, ...props }: React.ComponentProps<typeof Dialog
   );
 }
 
-function DialogDescription({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Description>) {
+function DialogDescription({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Description>) {
+  // Render the Radix Description as a <div> (via asChild) instead of the default <p>
+  // so it can safely contain block-level children (Text, Input, List, etc.) without
+  // triggering React's validateDOMNesting warnings.
   return (
-    <DialogPrimitive.Description
-      className={cn('text-muted-foreground text-sm', className)}
-      data-slot="dialog-description"
-      {...props}
-    />
+    <DialogPrimitive.Description asChild {...props}>
+      <div className={cn('text-muted-foreground text-sm', className)} data-slot="dialog-description">
+        {children}
+      </div>
+    </DialogPrimitive.Description>
   );
 }
 

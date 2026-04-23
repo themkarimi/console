@@ -13,14 +13,13 @@ import { Avatar, Box, Button, ColorModeSwitch, CopyButton, Flex, Popover, Popove
 import { Link, useLocation, useMatchRoute } from '@tanstack/react-router';
 import { Heading } from 'components/redpanda-ui/components/typography';
 import { cn } from 'components/redpanda-ui/lib/utils';
-import { computed } from 'mobx';
 import { observer } from 'mobx-react';
-import { Fragment, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 
 import { AuthenticationMethod } from '../../protogen/redpanda/api/console/v1alpha1/authentication_pb';
-import { isEmbedded } from '../../config';
-import { api } from '../../state/backend-api';
-import { type BreadcrumbEntry, uiState } from '../../state/ui-state';
+import { isEmbedded, isFeatureFlagEnabled } from '../../config';
+import { api, useApiStoreHook } from '../../state/backend-api';
+import { type BreadcrumbEntry, useUIStateStore } from '../../state/ui-state';
 import { IsDev, getBasePath } from '../../utils/env';
 import DataRefreshButton from '../misc/buttons/data-refresh/component';
 import { UserPreferencesButton, UserPreferencesDialog } from '../misc/user-preferences';
@@ -70,16 +69,20 @@ function BreadcrumbHeaderRow({ useNewSidebar, breadcrumbItems }: BreadcrumbHeade
   );
 }
 
-const AppPageHeader = observer(() => {
+function AppPageHeader() {
+  useApiStoreHook((s) => s.userData); // re-render when userData changes
   const showRefresh = useShouldShowRefresh();
-
   const shouldHideHeader = useShouldHideHeader();
   const useNewSidebar = !isEmbedded();
 
-  const breadcrumbItems = computed(() => {
-    const items: BreadcrumbEntry[] = [...uiState.pageBreadcrumbs];
+  const pageBreadcrumbs = useUIStateStore((s) => s.pageBreadcrumbs);
+  const selectedClusterName = useUIStateStore((s) => s.selectedClusterName);
+  const shouldHidePageHeader = useUIStateStore((s) => s.shouldHidePageHeader);
 
-    if (!isEmbedded() && uiState.selectedClusterName) {
+  const breadcrumbItems = useMemo(() => {
+    const items: BreadcrumbEntry[] = [...pageBreadcrumbs];
+
+    if (!isEmbedded() && selectedClusterName) {
       items.unshift({
         heading: '',
         title: 'Cluster',
@@ -88,18 +91,19 @@ const AppPageHeader = observer(() => {
     }
 
     return items;
-  }).get();
+  }, [pageBreadcrumbs, selectedClusterName]);
 
-  const lastBreadcrumb = breadcrumbItems.pop();
+  const lastBreadcrumb = breadcrumbItems.at(-1);
+  const breadcrumbsExceptLast = breadcrumbItems.slice(0, -1);
 
-  if (shouldHideHeader || uiState.shouldHidePageHeader) {
+  if (shouldHideHeader || shouldHidePageHeader) {
     return null;
   }
 
   return (
     <Box>
       {/* we need to refactor out #mainLayout > div rule, for now I've added this box as a workaround */}
-      <BreadcrumbHeaderRow breadcrumbItems={breadcrumbItems} useNewSidebar={useNewSidebar} />
+      <BreadcrumbHeaderRow breadcrumbItems={breadcrumbsExceptLast} useNewSidebar={useNewSidebar} />
 
       <Flex alignItems="center" justifyContent="space-between" pb={2}>
         <Flex alignItems="center">
@@ -109,7 +113,7 @@ const AppPageHeader = observer(() => {
               className={cn('mr-2', lastBreadcrumb.options?.canBeTruncated ? 'break-spaces break-all' : 'nowrap')}
               level={1}
             >
-              {lastBreadcrumb.title}
+              {lastBreadcrumb.titleNode ?? lastBreadcrumb.title}
             </Heading>
           ) : null}
           {lastBreadcrumb ? (
@@ -141,7 +145,7 @@ const AppPageHeader = observer(() => {
       </Flex>
     </Box>
   );
-});
+}
 
 export default AppPageHeader;
 
@@ -268,6 +272,24 @@ function useShouldShowRefresh() {
 }
 function useShouldHideHeader() {
   const { pathname } = useLocation();
+  const matchRoute = useMatchRoute();
+
+  // Hide header when PipelinePage renders (it has its own header/breadcrumbs)
+  const isPipelineRoute =
+    matchRoute({ to: '/rp-connect/$pipelineId' }) ||
+    matchRoute({ to: '/rp-connect/$pipelineId/edit' }) ||
+    matchRoute({ to: '/rp-connect/create' });
+
+  // Both flags are cloud-only (schema requires embedded mode).
+  // enablePipelineDiagrams: full new pipeline layout with diagrams.
+  // enableRpcnTiles: new tiles-based create flow embedded in legacy layout.
+  if (
+    isPipelineRoute &&
+    isEmbedded() &&
+    (isFeatureFlagEnabled('enablePipelineDiagrams') || isFeatureFlagEnabled('enableRpcnTiles'))
+  ) {
+    return true;
+  }
 
   // Only hide header in embedded mode for pages that have their own headers
   if (!isEmbedded()) {

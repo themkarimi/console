@@ -22,10 +22,9 @@ import {
   useToast,
 } from '@redpanda-data/ui';
 import { EditIcon, InfoIcon } from 'components/icons';
-import { observer, useLocalObservable } from 'mobx-react';
 import type { FC } from 'react';
 import { useState } from 'react';
-import { Controller, type SubmitHandler, useForm } from 'react-hook-form';
+import { Controller, type SubmitHandler, useForm, useWatch } from 'react-hook-form';
 
 import { DataSizeSelect, DurationSelect, NumInput, RatioInput } from './CreateTopicModal/create-topic-modal';
 import type { ConfigEntryExtended } from '../../../state/rest-interfaces';
@@ -37,7 +36,7 @@ import {
 import './TopicConfiguration.scss';
 
 import { isServerless } from '../../../config';
-import { api } from '../../../state/backend-api';
+import { api, useApiStoreHook } from '../../../state/backend-api';
 import { SingleSelect } from '../../misc/select';
 
 type ConfigurationEditorProps = {
@@ -73,7 +72,6 @@ const ConfigEditorForm: FC<{
     control,
     handleSubmit,
     formState: { isSubmitting },
-    watch,
   } = useForm<Inputs>({
     defaultValues: {
       valueType: defaultValueType,
@@ -111,12 +109,13 @@ const ConfigEditorForm: FC<{
       value = customValue;
     }
 
+    const configValue = operation === 'SET' ? String(value) : undefined;
     try {
       await api.changeTopicConfig(targetTopic, [
         {
           key: editedEntry.name,
           op: operation,
-          value: operation === 'SET' ? String(value) : undefined,
+          value: configValue,
         },
       ]);
       toast({
@@ -136,7 +135,7 @@ const ConfigEditorForm: FC<{
     }
   };
 
-  const valueType = watch('valueType');
+  const valueType = useWatch({ control, name: 'valueType' });
 
   const SOURCE_PRIORITY_ORDER = [
     'DYNAMIC_TOPIC_CONFIG',
@@ -221,24 +220,19 @@ const ConfigEditorForm: FC<{
   );
 };
 
-const ConfigurationEditor: FC<ConfigurationEditorProps> = observer((props) => {
-  const $state = useLocalObservable<{
-    filter?: string;
-    editedEntry: ConfigEntryExtended | null;
-  }>(() => ({
-    filter: '',
-    editedEntry: null,
-  }));
+const ConfigurationEditor: FC<ConfigurationEditorProps> = (props) => {
+  const [filter, setFilter] = useState<string>('');
+  const [editedEntry, setEditedEntry] = useState<ConfigEntryExtended | null>(null);
+  const topicPermissions = useApiStoreHook((s) => s.topicPermissions.get(props.targetTopic));
 
   const editConfig = (configEntry: ConfigEntryExtended) => {
-    $state.editedEntry = configEntry;
+    setEditedEntry(configEntry);
   };
 
   const topic = props.targetTopic;
   const hasEditPermissions = topic ? (api.topicPermissions.get(topic)?.canEditTopicConfig ?? (api.userData?.canPatchConfigs !== false)) : (api.userData?.canPatchConfigs !== false);
 
   let entries = props.entries;
-  const filter = $state.filter;
   if (filter) {
     entries = entries.filter((x) => x.name.includes(filter) || (x.value ?? '').includes(filter));
   }
@@ -285,11 +279,11 @@ const ConfigurationEditor: FC<ConfigurationEditorProps> = observer((props) => {
 
   return (
     <Box pt={4}>
-      {$state.editedEntry !== null && (
+      {editedEntry !== null && (
         <ConfigEditorForm
-          editedEntry={$state.editedEntry}
+          editedEntry={editedEntry}
           onClose={() => {
-            $state.editedEntry = null;
+            setEditedEntry(null);
           }}
           onSuccess={() => {
             props.onForceRefresh();
@@ -298,14 +292,7 @@ const ConfigurationEditor: FC<ConfigurationEditorProps> = observer((props) => {
         />
       )}
       <div className="configGroupTable" data-testid="config-group-table">
-        <SearchField
-          icon="filter"
-          placeholderText="Filter"
-          searchText={$state.filter || ''}
-          setSearchText={(value) => {
-            $state.filter = value;
-          }}
-        />
+        <SearchField icon="filter" placeholderText="Filter" searchText={filter} setSearchText={setFilter} />
         {categories.map((x) => (
           <ConfigGroup
             entries={x.items}
@@ -318,91 +305,87 @@ const ConfigurationEditor: FC<ConfigurationEditorProps> = observer((props) => {
       </div>
     </Box>
   );
-});
+};
 
 export default ConfigurationEditor;
 
-const ConfigGroup = observer(
-  (p: {
-    groupName?: string;
-    onEditEntry: (configEntry: ConfigEntryExtended) => void;
-    entries: ConfigEntryExtended[];
-    hasEditPermissions: boolean;
-  }) => (
+const ConfigGroup = (p: {
+  groupName?: string;
+  onEditEntry: (configEntry: ConfigEntryExtended) => void;
+  entries: ConfigEntryExtended[];
+  hasEditPermissions: boolean;
+}) => (
+  <>
+    <div className="configGroupSpacer" />
+    {Boolean(p.groupName) && <div className="configGroupTitle">{p.groupName}</div>}
+    {p.entries.map((e) => (
+      <ConfigEntryComponent
+        entry={e}
+        hasEditPermissions={p.hasEditPermissions}
+        key={e.name}
+        onEditEntry={p.onEditEntry}
+      />
+    ))}
+  </>
+);
+
+const ConfigEntryComponent = (p: {
+  onEditEntry: (configEntry: ConfigEntryExtended) => void;
+  entry: ConfigEntryExtended;
+  hasEditPermissions: boolean;
+}) => {
+  const { canEdit, reason: nonEdittableReason } = isTopicConfigEdittable(p.entry, p.hasEditPermissions);
+
+  const entry = p.entry;
+  const friendlyValue = formatConfigValue(entry.name, entry.value, 'friendly');
+
+  return (
     <>
-      <div className="configGroupSpacer" />
-      {Boolean(p.groupName) && <div className="configGroupTitle">{p.groupName}</div>}
-      {p.entries.map((e) => (
-        <ConfigEntryComponent
-          entry={e}
-          hasEditPermissions={p.hasEditPermissions}
-          key={e.name}
-          onEditEntry={p.onEditEntry}
-        />
-      ))}
-    </>
-  )
-);
+      <Flex direction="column">
+        <Text fontWeight="600">{p.entry.name}</Text>
+      </Flex>
 
-const ConfigEntryComponent = observer(
-  (p: {
-    onEditEntry: (configEntry: ConfigEntryExtended) => void;
-    entry: ConfigEntryExtended;
-    hasEditPermissions: boolean;
-  }) => {
-    const { canEdit, reason: nonEdittableReason } = isTopicConfigEdittable(p.entry, p.hasEditPermissions);
+      <Text>{friendlyValue}</Text>
 
-    const entry = p.entry;
-    const friendlyValue = formatConfigValue(entry.name, entry.value, 'friendly');
+      <span className="isEditted">{Boolean(entry.isExplicitlySet) && 'Custom'}</span>
 
-    return (
-      <>
-        <Flex direction="column">
-          <Text fontWeight="600">{p.entry.name}</Text>
-        </Flex>
-
-        <Text>{friendlyValue}</Text>
-
-        <span className="isEditted">{Boolean(entry.isExplicitlySet) && 'Custom'}</span>
-
-        <span className="configButtons">
-          <Tooltip hasArrow isDisabled={canEdit} label={nonEdittableReason} placement="left">
-            <button
-              className={`btnEdit${canEdit ? '' : 'disabled'}`}
-              onClick={() => {
-                if (canEdit) {
-                  p.onEditEntry(p.entry);
-                }
-              }}
-              type="button"
-            >
-              <Icon as={EditIcon} />
-            </button>
-          </Tooltip>
-          {Boolean(entry.documentation) && (
-            <Popover
-              content={
-                <Flex flexDirection="column" gap={2}>
-                  <Text fontSize="lg" fontWeight="bold">
-                    {entry.name}
-                  </Text>
-                  <Text fontSize="sm">{entry.documentation}</Text>
-                  <Text fontSize="sm">{getConfigDescription(entry.source)}</Text>
-                </Flex>
+      <span className="configButtons">
+        <Tooltip hasArrow isDisabled={canEdit} label={nonEdittableReason} placement="left">
+          <button
+            className={`btnEdit${canEdit ? '' : 'disabled'}`}
+            onClick={() => {
+              if (canEdit) {
+                p.onEditEntry(p.entry);
               }
-              hideCloseButton
-              size="lg"
-            >
-              <Box>
-                <Icon as={InfoIcon} />
-              </Box>
-            </Popover>
-          )}
-        </span>
-      </>
-    );
-  }
-);
+            }}
+            type="button"
+          >
+            <Icon as={EditIcon} />
+          </button>
+        </Tooltip>
+        {Boolean(entry.documentation) && (
+          <Popover
+            content={
+              <Flex flexDirection="column" gap={2}>
+                <Text fontSize="lg" fontWeight="bold">
+                  {entry.name}
+                </Text>
+                <Text fontSize="sm">{entry.documentation}</Text>
+                <Text fontSize="sm">{getConfigDescription(entry.source)}</Text>
+              </Flex>
+            }
+            hideCloseButton
+            size="lg"
+          >
+            <Box>
+              <Icon as={InfoIcon} />
+            </Box>
+          </Popover>
+        )}
+      </span>
+    </>
+  );
+};
 
 function isTopicConfigEdittable(
   entry: ConfigEntryExtended,

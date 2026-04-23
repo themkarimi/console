@@ -28,7 +28,6 @@ import {
 } from 'components/ui/consumer-group/consumer-group-status';
 import { ConsumerLag } from 'components/ui/consumer-group/consumer-lag';
 import { CircleHelp, Search, Settings } from 'lucide-react';
-import { runInAction } from 'mobx';
 import {
   type KnowledgeBase,
   type KnowledgeBaseUpdate,
@@ -70,17 +69,15 @@ type KnowledgeBaseUpdateForm = KnowledgeBaseUpdate & {
 };
 
 export const updatePageTitle = (knowledgebaseId?: string) => {
-  runInAction(() => {
-    uiState.pageTitle = knowledgebaseId ? `Knowledge Base - ${knowledgebaseId}` : 'Knowledge Base Details';
-    uiState.pageBreadcrumbs = [
-      { title: 'Knowledge Bases', linkTo: '/knowledgebases' },
-      {
-        title: knowledgebaseId || 'Details',
-        linkTo: '',
-        heading: knowledgebaseId || 'Knowledge Base Details',
-      },
-    ];
-  });
+  uiState.pageTitle = knowledgebaseId ? `Knowledge Base - ${knowledgebaseId}` : 'Knowledge Base Details';
+  uiState.pageBreadcrumbs = [
+    { title: 'Knowledge Bases', linkTo: '/knowledgebases' },
+    {
+      title: knowledgebaseId || 'Details',
+      linkTo: '',
+      heading: knowledgebaseId || 'Knowledge Base Details',
+    },
+  ];
 };
 
 export type KnowledgeBaseEditTabsRef = {
@@ -223,7 +220,6 @@ export const KnowledgeBaseDetailsPage = () => {
 
   // Local state
   const [isEditMode, setIsEditMode] = useState(false);
-  const [formHasChanges, setFormHasChanges] = useState(false);
   const prevEditModeRef = useRef(isEditMode);
 
   // Fetch knowledge base data
@@ -257,15 +253,10 @@ export const KnowledgeBaseDetailsPage = () => {
   const refreshFormData = useCallback(() => {
     if (knowledgeBase) {
       form.reset(initializeFormData(knowledgeBase));
-      setFormHasChanges(false);
     }
   }, [knowledgeBase, form]);
 
-  useEffect(() => {
-    if (knowledgebaseId) {
-      updatePageTitle(knowledgebaseId);
-    }
-  }, [knowledgebaseId]);
+  updatePageTitle(knowledgebaseId);
 
   // Only refresh form when entering edit mode, not when data refetches while in edit mode
   useEffect(() => {
@@ -281,10 +272,6 @@ export const KnowledgeBaseDetailsPage = () => {
 
   // Subscribe to form changes by accessing isDirty during render
   const { isDirty } = form.formState;
-
-  useEffect(() => {
-    setFormHasChanges(isDirty);
-  }, [isDirty]);
 
   const generateUpdateMask = useCallback((): string[] => {
     const updateMask: string[] = [];
@@ -314,12 +301,10 @@ export const KnowledgeBaseDetailsPage = () => {
   // Handlers
   const handleStartEdit = () => {
     setIsEditMode(true);
-    setFormHasChanges(false);
   };
 
   const handleCancelEdit = () => {
     setIsEditMode(false);
-    setFormHasChanges(false);
     refreshFormData();
   };
 
@@ -379,7 +364,6 @@ export const KnowledgeBaseDetailsPage = () => {
           toast.success('Knowledge base updated successfully');
           refetchKnowledgeBase();
           setIsEditMode(false);
-          setFormHasChanges(false);
           form.reset(updatedKnowledgeBase, { keepValues: true });
           resolve();
         },
@@ -493,7 +477,7 @@ export const KnowledgeBaseDetailsPage = () => {
 
           <TabsContent value="configuration">
             <KnowledgeBaseConfigurationTab
-              formHasChanges={formHasChanges}
+              isDirty={isDirty}
               isEditMode={isEditMode}
               isUpdating={isUpdating}
               knowledgeBase={knowledgeBase}

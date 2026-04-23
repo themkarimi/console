@@ -34,7 +34,6 @@ import { Code, ConnectError, type Interceptor } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-web';
 import { QueryClient } from '@tanstack/react-query';
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router';
-import { observer } from 'mobx-react';
 import { protobufRegistry } from 'protobuf-registry';
 
 import { FederatedProviders } from './federated-providers';
@@ -43,6 +42,7 @@ import type { ConsoleAppProps } from './types';
 import { NotFoundPage } from '../components/misc/not-found-page';
 import { addBearerTokenInterceptor, checkExpiredLicenseInterceptor, config, getGrpcBasePath, setup } from '../config';
 import { routeTree } from '../routeTree.gen';
+import { installUISettingsSideEffects } from '../state/ui';
 
 /**
  * Creates an interceptor that refreshes the token on 401 and retries the request.
@@ -146,6 +146,10 @@ function createFederatedQueryClient() {
   });
 }
 
+const setConfigJwt = (token: string) => {
+  config.jwt = token;
+};
+
 /**
  * Federated Console App component for Module Federation v2.0.
  * This is the main entry point for Cloud UI integration.
@@ -163,38 +167,43 @@ function ConsoleAppInner({
   featureFlags,
 }: ConsoleAppProps) {
   const [isInitialized, setIsInitialized] = useState(false);
-  const routerRef = useRef<ReturnType<typeof createRouter<typeof routeTree>> | null>(null);
   // Track last notified path to prevent navigation loops between host and remote
   const lastNotifiedPathRef = useRef<string>(initialPath);
 
   // Create stable QueryClient instance
   const queryClient = useMemo(() => createFederatedQueryClient(), []);
 
-  // Store getAccessToken in ref so TokenManager always uses latest callback
-  const getAccessTokenRef = useRef(getAccessToken);
-  getAccessTokenRef.current = getAccessToken;
-
-  // Create stable TokenManager instance (uses ref to access latest getAccessToken)
-  const tokenManager = useMemo(
+  // Create stable TokenManager instance with initial getAccessToken
+  const [tokenManager] = useState(
     () =>
       new TokenManager(async () => {
-        const token = await getAccessTokenRef.current();
-        config.jwt = token;
+        const token = await getAccessToken();
+        setConfigJwt(token);
         return token;
-      }),
-    []
+      })
   );
+
+  // Keep TokenManager's callback in sync when getAccessToken prop changes
+  useEffect(() => {
+    tokenManager.setGetAccessToken(async () => {
+      const token = await getAccessToken();
+      setConfigJwt(token);
+      return token;
+    });
+  }, [getAccessToken, tokenManager]);
 
   // Create token refresh interceptor using TokenManager
   const tokenRefreshInterceptor = useMemo(() => createTokenRefreshInterceptor(tokenManager), [tokenManager]);
 
   // Initialize Console on mount and cleanup on unmount
   useEffect(() => {
+    let setupTeardown: (() => void) | undefined;
+
     const initialize = async () => {
       await tokenManager.refresh();
 
       // Setup Console config with overrides
-      setup({
+      setupTeardown = setup({
         jwt: config.jwt,
         clusterId,
         setSidebarItems: onSidebarItemsChange,
@@ -208,8 +217,12 @@ function ConsoleAppInner({
 
     initialize();
 
+    const uiSettingsTeardown = installUISettingsSideEffects();
+
     // Cleanup on unmount
     return () => {
+      uiSettingsTeardown();
+      setupTeardown?.();
       tokenManager.reset();
       queryClient.clear();
     };
@@ -228,10 +241,16 @@ function ConsoleAppInner({
     [configOverrides?.urlOverride?.grpc, tokenRefreshInterceptor]
   );
 
+  // Capture initialPath on first render only — subsequent navigation is handled
+  // by the navigateTo prop via router.navigate(). Including initialPath in the
+  // useMemo deps would recreate the entire router on every host navigation,
+  // remounting all route components and retriggering all data fetches.
+  const initialPathRef = useRef(initialPath);
+
   // Create memory history router (host controls browser URL)
   const router = useMemo(() => {
     const memoryHistory = createMemoryHistory({
-      initialEntries: [initialPath],
+      initialEntries: [initialPathRef.current],
     });
 
     const r = createRouter({
@@ -245,9 +264,8 @@ function ConsoleAppInner({
       defaultNotFoundComponent: NotFoundPage,
     });
 
-    routerRef.current = r;
     return r;
-  }, [initialPath, queryClient, dataplaneTransport]);
+  }, [queryClient, dataplaneTransport]);
 
   // Subscribe to route changes and notify host (with loop prevention)
   useEffect(() => {
@@ -256,7 +274,8 @@ function ConsoleAppInner({
     }
 
     const unsubscribe = router.subscribe('onResolved', ({ toLocation }) => {
-      const newPath = toLocation.pathname;
+      // Include search params so tab state and filters sync to Cloud UI's URL
+      const newPath = toLocation.pathname + (toLocation.searchStr || '');
 
       // Skip if path hasn't changed (prevents loops)
       if (newPath === lastNotifiedPathRef.current) {
@@ -272,19 +291,26 @@ function ConsoleAppInner({
     };
   }, [router, onRouteChange]);
 
-  // Handle navigation from host via navigateTo prop (browser back/forward)
+  // Handle navigation from host via navigateTo prop (browser back/forward).
+  // navigateTo may include search params (e.g., '/topics?tab=messages').
   useEffect(() => {
-    if (!(navigateTo && isInitialized && routerRef.current)) {
+    if (!(navigateTo && isInitialized && router)) {
       return;
     }
 
-    const currentPath = routerRef.current.state.location.pathname;
+    const currentPath = router.state.location.pathname + (router.state.location.searchStr || '');
     if (navigateTo !== currentPath) {
       // Update ref to prevent echo back to host
       lastNotifiedPathRef.current = navigateTo;
-      routerRef.current.navigate({ to: navigateTo });
+      const qIdx = navigateTo.indexOf('?');
+      const toPath = qIdx >= 0 ? navigateTo.slice(0, qIdx) : navigateTo;
+      const toSearch = qIdx >= 0 ? navigateTo.slice(qIdx + 1) : undefined;
+      router.navigate({
+        to: toPath,
+        search: toSearch ? Object.fromEntries(new URLSearchParams(toSearch)) : undefined,
+      });
     }
-  }, [navigateTo, isInitialized]);
+  }, [navigateTo, isInitialized, router]);
 
   // Don't render until initialized, don't show anything until then
   if (!isInitialized) {
@@ -300,10 +326,6 @@ function ConsoleAppInner({
   );
 }
 
-/**
- * Export the observed version of ConsoleApp.
- * This ensures MobX reactivity works correctly.
- */
-export const ConsoleApp = observer(ConsoleAppInner);
+export const ConsoleApp = ConsoleAppInner;
 
 export default ConsoleApp;

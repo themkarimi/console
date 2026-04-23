@@ -14,23 +14,6 @@ export const REDPANDA_TOPIC_AND_USER_COMPONENTS = [
   'redpanda_migrator_offsets',
 ];
 
-/**
- * Fields that are critical for connection and should always be shown
- * even when they have defaults.
- *
- * Note: These fields are only shown if they exist in the component's schema.
- * The existence check happens naturally through schema iteration.
- */
-export const CRITICAL_CONNECTION_FIELDS = new Set([
-  'sasl',
-  'consumer_group',
-  'topics',
-  'topic',
-  'key',
-  'partition',
-  'label',
-]);
-
 export const REDPANDA_CONTEXTUAL_VARIABLES = {
   REDPANDA_BROKERS: {
     name: 'REDPANDA_BROKERS' as const,
@@ -64,7 +47,7 @@ export const REDPANDA_CONTEXTUAL_VARIABLES = {
   },
 } as const;
 
-export const getContextualVariableSyntax = (name: ContextualVariableName): string => `\${${name}}`;
+export const getContextualVariableSyntax = (name: string): string => `\${${name}}`;
 
 export type ContextualVariableName = keyof typeof REDPANDA_CONTEXTUAL_VARIABLES;
 
@@ -105,6 +88,18 @@ export const stepMotionProps: MotionProps = {
   transition: { duration: 0.3, ease: 'easeInOut' },
 };
 
-export const HANDLED_ARRAY_MERGE_PATHS = ['pipeline.processors', 'cache_resources', 'rate_limit_resources'];
+export const RedpandaConnectorSetupStep = {
+  ADD_TOPIC: 'redpanda-connector-add-topic',
+  ADD_USER: 'redpanda-connector-add-user',
+} as const;
+
+export const redpandaConnectorSetupStepDefinitions = [
+  { id: RedpandaConnectorSetupStep.ADD_TOPIC, title: 'Add a topic' },
+  { id: RedpandaConnectorSetupStep.ADD_USER, title: 'Add permissions' },
+] as const;
+
+const RedpandaConnectorSetupStepDefinition = defineStepper(...redpandaConnectorSetupStepDefinitions);
+export const RedpandaConnectorSetupStepper = RedpandaConnectorSetupStepDefinition.Stepper;
+export type RedpandaConnectorSetupSteps = typeof RedpandaConnectorSetupStepDefinition.Steps;
 
 export type PipelineMode = 'create' | 'edit' | 'view';

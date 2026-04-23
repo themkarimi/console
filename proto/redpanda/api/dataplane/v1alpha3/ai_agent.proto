@@ -9,6 +9,7 @@ import "google/api/resource.proto";
 import "google/protobuf/field_mask.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
 import "redpanda/api/auth/v1/authorization.proto";
+import "redpanda/api/common/v1/options.proto";
 import "redpanda/api/dataplane/v1/pipeline.proto";
 
 // Defines the AI Agent resource.
@@ -144,12 +145,33 @@ message AIAgent {
       ];
     }
 
+    message Bedrock {
+      // AWS region for Bedrock inference (e.g., "us-east-1").
+      string region = 1 [
+        (google.api.field_behavior) = REQUIRED,
+        (buf.validate.field).required = true,
+        (buf.validate.field).string.pattern = "^[a-z]{2}(-[a-z]+-\\d+)?$"
+      ];
+      // Optional secret reference for the AWS access key ID.
+      // When omitted, uses the AWS default credential chain (IRSA, env vars, instance profile).
+      string access_key_id_secret_ref = 2 [
+        (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
+        (buf.validate.field).string.pattern = "^\\$\\{secrets\\.[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)?\\}$"
+      ];
+      // Optional secret reference for the AWS secret access key.
+      string secret_access_key_secret_ref = 3 [
+        (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
+        (buf.validate.field).string.pattern = "^\\$\\{secrets\\.[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)?\\}$"
+      ];
+    }
+
     oneof provider {
       option (buf.validate.oneof).required = true;
       OpenAI openai = 1;
       Anthropic anthropic = 2;
       Google google = 3;
       OpenAICompatible openai_compatible = 4;
+      Bedrock bedrock = 5;
     }
   }
 
@@ -209,17 +231,15 @@ message AIAgent {
     string description = 3 [(buf.validate.field).string.max_len = 256];
   }
 
-  // Gateway configuration for routing requests through an AI Gateway.
+  // Optional gateway configuration for routing requests through an AI Gateway.
   message GatewayConfig {
-    // Virtual gateway ID (XID format - 20-character alphanumeric string).
-    // This ID is used in the x-gateway-id header for multi-tenant routing.
-    string virtual_gateway_id = 1 [
-      (google.api.field_behavior) = REQUIRED,
-      (buf.validate.field).required = true,
-      (buf.validate.field).string.pattern = "^[a-z0-9]+$",
-      (buf.validate.field).string.len = 20,
-      (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {description: "Virtual gateway ID (20-character XID format)."}
-    ];
+    // Deprecated: No longer needed — there is always one gateway per cluster.
+    string virtual_gateway_id = 1 [deprecated = true];
+
+    // Name of the configured LLMProvider in the AI Gateway (aigw).
+    // Used to determine which provider to route requests through.
+    // Example: "my-openai-provider"
+    string llm_provider = 2;
   }
 
   // A2A agent card configuration for customizing agent discovery metadata.
@@ -307,6 +327,10 @@ service AIAgentService {
       required_permission: PERMISSION_EDIT
       api: API_AI_AGENT
     };
+    option (redpanda.api.common.v1.method_authorization) = {
+      resource_type: "aiagents"
+      permission: "dataplane_aiagent_create"
+    };
   }
 
   // GetAIAgent gets a specific AI Agent.
@@ -338,6 +362,11 @@ service AIAgentService {
       required_permission: PERMISSION_VIEW
       api: API_AI_AGENT
     };
+    option (redpanda.api.common.v1.method_authorization) = {
+      resource_type: "aiagents"
+      id_getter_cel: "request.id"
+      permission: "dataplane_aiagent_get"
+    };
   }
 
   // ListAIAgents implements the list AI agents method which lists the AI agents
@@ -360,6 +389,14 @@ service AIAgentService {
     option (redpanda.api.auth.v1.authorization) = {
       required_permission: PERMISSION_VIEW
       api: API_AI_AGENT
+    };
+    option (redpanda.api.common.v1.collection_authorization) = {
+      collection_getter_cel: "response.ai_agents"
+      each: {
+        resource_type: "aiagents"
+        id_getter_cel: "each.id"
+        permission: "dataplane_aiagent_list"
+      }
     };
   }
 
@@ -385,6 +422,11 @@ service AIAgentService {
     option (redpanda.api.auth.v1.authorization) = {
       required_permission: PERMISSION_EDIT
       api: API_AI_AGENT
+    };
+    option (redpanda.api.common.v1.method_authorization) = {
+      resource_type: "aiagents"
+      id_getter_cel: "request.id"
+      permission: "dataplane_aiagent_update"
     };
   }
 
@@ -414,6 +456,11 @@ service AIAgentService {
     option (redpanda.api.auth.v1.authorization) = {
       required_permission: PERMISSION_EDIT
       api: API_AI_AGENT
+    };
+    option (redpanda.api.common.v1.method_authorization) = {
+      resource_type: "aiagents"
+      id_getter_cel: "request.id"
+      permission: "dataplane_aiagent_delete"
     };
   }
 
@@ -446,6 +493,11 @@ service AIAgentService {
       required_permission: PERMISSION_EDIT
       api: API_AI_AGENT
     };
+    option (redpanda.api.common.v1.method_authorization) = {
+      resource_type: "aiagents"
+      id_getter_cel: "request.id"
+      permission: "dataplane_aiagent_delete"
+    };
   }
 
   // StartAIAgent starts a specific AI agent that has been previously stopped.
@@ -476,6 +528,11 @@ service AIAgentService {
     option (redpanda.api.auth.v1.authorization) = {
       required_permission: PERMISSION_EDIT
       api: API_AI_AGENT
+    };
+    option (redpanda.api.common.v1.method_authorization) = {
+      resource_type: "aiagents"
+      id_getter_cel: "request.id"
+      permission: "dataplane_aiagent_create"
     };
   }
 }

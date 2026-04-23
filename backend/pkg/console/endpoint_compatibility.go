@@ -114,22 +114,24 @@ func (s *Service) GetEndpointCompatibility(ctx context.Context) (EndpointCompati
 			Requests: []kmsg.Request{&kmsg.DescribeClientQuotasRequest{}},
 		},
 		{
-			URL:            "/api/users",
-			Method:         "GET",
-			Requests:       []kmsg.Request{&kmsg.DescribeUserSCRAMCredentialsRequest{}},
-			HasRedpandaAPI: true,
+			URL:      "/api/users",
+			Method:   "GET",
+			Requests: []kmsg.Request{&kmsg.DescribeUserSCRAMCredentialsRequest{}},
 		},
 		{
-			URL:            "/api/users",
-			Method:         "POST",
-			Requests:       []kmsg.Request{&kmsg.AlterUserSCRAMCredentialsRequest{}},
-			HasRedpandaAPI: true,
+			URL:      "/api/users",
+			Method:   "POST",
+			Requests: []kmsg.Request{&kmsg.AlterUserSCRAMCredentialsRequest{}},
 		},
 		{
-			URL:            "/api/users",
-			Method:         "DELETE",
-			Requests:       []kmsg.Request{&kmsg.AlterUserSCRAMCredentialsRequest{}},
-			HasRedpandaAPI: true,
+			URL:      "/api/users",
+			Method:   "DELETE",
+			Requests: []kmsg.Request{&kmsg.AlterUserSCRAMCredentialsRequest{}},
+		},
+		{
+			URL:      dataplanev1connect.UserServiceName,
+			Method:   "POST",
+			Requests: []kmsg.Request{&kmsg.DescribeUserSCRAMCredentialsRequest{}, &kmsg.AlterUserSCRAMCredentialsRequest{}},
 		},
 		{
 			URL:             consolev1alpha1connect.TransformServiceName,
@@ -152,6 +154,11 @@ func (s *Service) GetEndpointCompatibility(ctx context.Context) (EndpointCompati
 			URL:            consolev1alpha1connect.ShadowLinkServiceName,
 			Method:         "POST",
 			HasRedpandaAPI: false,
+		},
+		{
+			URL:             "/api/schema-registry/contexts",
+			Method:          "GET",
+			RedpandaFeature: redpandaFeatureSchemaRegistryContexts,
 		},
 	}
 
@@ -197,6 +204,12 @@ func (s *Service) GetEndpointCompatibility(ctx context.Context) (EndpointCompati
 		// Registry API support
 		if endpointReq.RedpandaFeature == redpandaFeatureSchemaRegistryACL {
 			endpointSupported = s.CheckSchemaRegistryACLSupport(ctx)
+		}
+
+		// Special case for Schema Registry Contexts feature - requires
+		// different detection strategies for Redpanda vs Kafka clusters.
+		if endpointReq.RedpandaFeature == redpandaFeatureSchemaRegistryContexts {
+			endpointSupported = s.CheckSchemaRegistryContextsSupport(ctx)
 		}
 
 		endpoints = append(endpoints, EndpointCompatibilityEndpoint{

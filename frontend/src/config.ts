@@ -23,7 +23,6 @@ import {
 import { createConnectTransport } from '@connectrpc/connect-web';
 import { loader, type Monaco } from '@monaco-editor/react';
 import memoizeOne from 'memoize-one';
-import { autorun, configure, observable, when } from 'mobx';
 // biome-ignore lint/performance/noNamespaceImport: part of monaco editor
 import * as monaco from 'monaco-editor';
 import { protobufRegistry } from 'protobuf-registry';
@@ -41,8 +40,8 @@ import { KnowledgeBaseService } from 'protogen/redpanda/api/dataplane/v1alpha3/k
 
 import { DEFAULT_API_BASE, FEATURE_FLAGS } from './components/constants';
 import { appGlobal } from './state/app-global';
-import { api } from './state/backend-api';
-import { uiState } from './state/ui-state';
+import { api, useApiStore } from './state/backend-api';
+import { useUIStateStore } from './state/ui-state';
 import { AppFeatures, getBasePath } from './utils/env';
 import { getEmbeddedAvailableRoutes } from './utils/route-utils';
 
@@ -119,7 +118,7 @@ export type SetConfigArguments = {
   fetch?: WindowOrWorkerGlobalScope['fetch'];
   jwt?: string;
   clusterId?: string;
-  aiGatewayUrl?: string;
+  aigwUrl?: string;
   urlOverride?: {
     rest?: string;
     ws?: string;
@@ -148,7 +147,7 @@ export type Breadcrumb = {
 
 type Config = {
   controlplaneUrl: string;
-  aiGatewayUrl?: string;
+  aigwUrl?: string;
   dataplaneTransport?: Transport;
   restBasePath: string;
   grpcBasePath: string;
@@ -177,10 +176,8 @@ type Config = {
   featureFlags: Record<keyof typeof FEATURE_FLAGS, boolean>;
 };
 
-// Config object is an mobx observable, always make sure you call it from
-// inside a componenet, don't be tempted to used it as singleton you might find
-// unexpected behaviour
-export const config: Config = observable({
+// Config object - plain JavaScript object, no longer using MobX observable
+export const config: Config = {
   restBasePath: getRestBasePath(),
   grpcBasePath: getGrpcBasePath(),
   controlplaneUrl: '',
@@ -196,7 +193,7 @@ export const config: Config = observable({
   isServerless: false,
   isAdpEnabled: false,
   featureFlags: FEATURE_FLAGS,
-});
+};
 
 const setConfig = ({
   fetch,
@@ -293,47 +290,88 @@ export const setMonacoTheme = (_editor: monaco.editor.IStandaloneCodeEditor, mon
   monaco.editor.setTheme('kowl');
 };
 
-setTimeout(() => {
-  autorun(() => {
-    const setBreadcrumbs = config.setBreadcrumbs;
-    if (!setBreadcrumbs) {
-      return;
+// Subscribe to UI state changes for breadcrumbs and sidebar items.
+// Installed from `setup()` so it is tied to the app's lifecycle and can be
+// torn down by the returned teardown function — not at module-top-level,
+// which previously pinned store subscribers across vitest isolate resets.
+function installUiStateSubscriptions(): () => void {
+  const unsubs: Array<() => void> = [];
+
+  try {
+    // Subscribe to breadcrumbs changes
+    let previousBreadcrumbs = useUIStateStore.getState().pageBreadcrumbs;
+
+    const unsubUi = useUIStateStore.subscribe((state) => {
+      const setBreadcrumbs = config.setBreadcrumbs;
+      if (!setBreadcrumbs) {
+        return;
+      }
+
+      // Only update if breadcrumbs changed
+      if (state.pageBreadcrumbs === previousBreadcrumbs) {
+        return;
+      }
+
+      previousBreadcrumbs = state.pageBreadcrumbs;
+
+      const breadcrumbs = state.pageBreadcrumbs.map((v) => ({
+        title: v.title,
+        to: v.linkTo,
+      }));
+
+      setBreadcrumbs(breadcrumbs);
+    });
+    unsubs.push(unsubUi);
+
+    const updateSidebarItems = () => {
+      const setSidebarItems = config.setSidebarItems;
+      if (!setSidebarItems) {
+        return;
+      }
+
+      // Don't emit sidebar items until endpoint compatibility is known,
+      // otherwise items gated by feature support will flicker.
+      if (!api.endpointCompatibility) {
+        return;
+      }
+
+      const sidebarItems = embeddedAvailableRoutesObservable.routes.map(
+        (r, i) =>
+          ({
+            title: r.title,
+            to: r.path,
+            icon: r.icon,
+            order: i,
+            group: r.group,
+          }) as SidebarItem
+      );
+
+      setSidebarItems(sidebarItems);
+    };
+
+    // Call once on initialization; also re-call whenever endpointCompatibility
+    // becomes available (it starts null and is populated after the first API fetch).
+    updateSidebarItems();
+    const unsubApi = useApiStore.subscribe((state, prev) => {
+      if (state.endpointCompatibility !== prev.endpointCompatibility) {
+        updateSidebarItems();
+      }
+    });
+    unsubs.push(unsubApi);
+  } catch {
+    // Ignore errors in test environments where stores might not be properly initialized
+  }
+
+  return () => {
+    for (const unsub of unsubs) {
+      try {
+        unsub();
+      } catch {
+        // ignore — teardown is best-effort
+      }
     }
-
-    const breadcrumbs = uiState.pageBreadcrumbs.map((v) => ({
-      title: v.title,
-      to: v.linkTo,
-    }));
-
-    setBreadcrumbs(breadcrumbs);
-  });
-
-  autorun(() => {
-    const setSidebarItems = config.setSidebarItems;
-    if (!setSidebarItems) {
-      return;
-    }
-
-    // Don't emit sidebar items until endpoint compatibility is known,
-    // otherwise items gated by feature support will flicker.
-    if (!api.endpointCompatibility) {
-      return;
-    }
-
-    const sidebarItems = embeddedAvailableRoutesObservable.routes.map(
-      (r, i) =>
-        ({
-          title: r.title,
-          to: r.path,
-          icon: r.icon,
-          order: i,
-          group: r.group,
-        }) as SidebarItem
-    );
-
-    setSidebarItems(sidebarItems);
-  });
-}, 50);
+  };
+}
 
 export function isEmbedded() {
   return config.jwt !== null && config.jwt !== undefined;
@@ -361,58 +399,106 @@ export function isAdpEnabled() {
   return config.isAdpEnabled && !isServerless();
 }
 
-export const embeddedAvailableRoutesObservable = observable({
+export const embeddedAvailableRoutesObservable = {
   get routes() {
     return getEmbeddedAvailableRoutes();
   },
-});
+};
+
+// Module-level state for cancelling `setup()`'s recursive user-data poll and
+// for holding the current setup teardown. `setup` is memoized with
+// memoize-one, so repeated calls with the same args no-op; these refs let the
+// harness (and app lifecycle) cancel the pending work explicitly.
+let checkUserDataCancelled = false;
+let currentSetupTeardown: (() => void) | null = null;
+let subscriptionInstallTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Cancels the recursive `checkUserData` polling timer started by `setup()`.
+ * Exposed for test cleanup + explicit app teardown.
+ */
+export function cancelCheckUserData(): void {
+  checkUserDataCancelled = true;
+}
+
+/**
+ * Tear down anything `setup()` installed (store subscriptions + polling timer).
+ * Safe to call multiple times.
+ */
+export function teardownSetup(): void {
+  if (subscriptionInstallTimeoutId !== null) {
+    clearTimeout(subscriptionInstallTimeoutId);
+    subscriptionInstallTimeoutId = null;
+  }
+  cancelCheckUserData();
+  if (currentSetupTeardown) {
+    const t = currentSetupTeardown;
+    currentSetupTeardown = null;
+    t();
+  }
+}
 
 export const setup = memoizeOne((setupArgs: SetConfigArguments) => {
+  // If setup() is re-invoked (memoize-one only caches the latest args), tear
+  // down any state installed by the previous invocation first to avoid
+  // stacking subscribers / pending timeouts.
+  teardownSetup();
+
   setConfig(setupArgs);
+
+  // Reset the cancel flag now that we're installing fresh state.
+  checkUserDataCancelled = false;
+
+  // Install UI / API store subscriptions on a short delay (matches historical
+  // behavior that waited for stores to initialize). Tracked so teardown can
+  // unsubscribe and clear the pending timeout.
+  subscriptionInstallTimeoutId = setTimeout(() => {
+    subscriptionInstallTimeoutId = null;
+    currentSetupTeardown = installUiStateSubscriptions();
+  }, 50);
+
+  // Set MonacoEnvironment synchronously before loader.init() to avoid race
+  // where the editor mounts before the worker URL resolver is available
+  window.MonacoEnvironment = {
+    getWorkerUrl(_, label: string): string {
+      switch (label) {
+        case 'editorWorkerService': {
+          return `${window.location.origin}/static/js/editor.worker.js`;
+        }
+        case 'typescript': {
+          return `${window.location.origin}/static/js/ts.worker.js`;
+        }
+        default: {
+          return `${window.location.origin}/static/js/${label}.worker.js`;
+        }
+      }
+    },
+  };
 
   // Tell monaco editor where to load dependencies from
   loader.config({ monaco });
-
-  // Ensure yaml workers are being loaded locally as well
-  loader.init().then(() => {
-    window.MonacoEnvironment = {
-      getWorkerUrl(_, label: string): string {
-        switch (label) {
-          case 'editorWorkerService': {
-            return `${window.location.origin}/static/js/editor.worker.js`;
-          }
-          case 'typescript': {
-            return `${window.location.origin}/static/js/ts.worker.js`;
-          }
-          default: {
-            return `${window.location.origin}/static/js/${label}.worker.js`;
-          }
-        }
-      },
-    };
-  });
-
-  // Configure MobX
-  configure({
-    enforceActions: 'never',
-    safeDescriptors: true,
-  });
 
   // Get supported endpoints / kafka cluster version
   // In the business version, that endpoint (like any other api endpoint) is
   // protected, so we need to delay the call until the user is logged in.
   if (AppFeatures.SINGLE_SIGN_ON) {
-    when(
-      () => Boolean(api.userData),
-      () => {
-        setTimeout(() => {
-          api.refreshSupportedEndpoints();
-          api.listLicenses();
-        });
+    // Poll for user data instead of using MobX when
+    const checkUserData = () => {
+      if (checkUserDataCancelled) {
+        return;
       }
-    );
+      if (api.userData) {
+        api.refreshSupportedEndpoints();
+        api.listLicenses();
+      } else {
+        setTimeout(checkUserData, 100);
+      }
+    };
+    checkUserData();
   } else {
     api.listLicenses();
     api.refreshSupportedEndpoints();
   }
+
+  return teardownSetup;
 });

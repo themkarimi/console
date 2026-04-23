@@ -10,7 +10,6 @@
  */
 
 import { Base64, fromUint8Array } from 'js-base64';
-import { makeObservable, observable } from 'mobx';
 import prettyBytesOriginal from 'pretty-bytes';
 import prettyMillisecondsOriginal from 'pretty-ms';
 
@@ -127,45 +126,6 @@ export class Timer {
   setDone() {
     this.target = 0;
   }
-}
-
-export class DebugTimerStore {
-  private static instance: DebugTimerStore;
-  static get Instance() {
-    if (!DebugTimerStore.instance) {
-      DebugTimerStore.instance = new DebugTimerStore();
-    }
-    return DebugTimerStore.instance;
-  }
-
-  @observable secondCounter = 0;
-  @observable private frame = 0;
-
-  private constructor() {
-    const ONE_SECOND_MS = 1000;
-    this.increaseSec = this.increaseSec.bind(this);
-    setInterval(this.increaseSec, ONE_SECOND_MS);
-
-    this.increaseFrame = this.increaseFrame.bind(this);
-    //setInterval(this.increaseFrame, 30);
-    makeObservable(this);
-  }
-
-  private increaseSec() {
-    this.secondCounter += 1;
-  }
-  private increaseFrame() {
-    this.frame += 1;
-  }
-
-  useSeconds() {
-    this.mobxTrigger = this.secondCounter;
-  }
-  useFrame() {
-    this.mobxTrigger = this.frame;
-  }
-
-  mobxTrigger: unknown;
 }
 
 let refreshCounter = 0; // used to always create a different value, forcing some components to always re-render

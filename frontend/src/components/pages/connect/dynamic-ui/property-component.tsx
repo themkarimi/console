@@ -10,7 +10,6 @@
  */
 
 import { Box, Input, NumberInput, RadioGroup, Switch } from '@redpanda-data/ui';
-import { observer } from 'mobx-react';
 
 import { ErrorWrapper } from './forms/error-wrapper';
 import { SecretInput } from './forms/secret-input';
@@ -19,8 +18,13 @@ import type { Property } from '../../../../state/connect/state';
 import { PropertyWidth } from '../../../../state/rest-interfaces';
 import { SingleSelect } from '../../../misc/select';
 
+const updatePropertyValue = (property: Property, value: Property['value']) => {
+  property.value = value;
+  property.notifyChange();
+};
+
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: complex business logic
-export const PropertyComponent = observer((props: { property: Property }) => {
+export const PropertyComponent = (props: { property: Property }) => {
   const p = props.property;
   const def = p.entry.definition;
   const metadata = p.entry.metadata;
@@ -57,7 +61,7 @@ export const PropertyComponent = observer((props: { property: Property }) => {
           <RadioGroup
             name={p.name}
             onChange={(e) => {
-              p.value = e;
+              updatePropertyValue(p, e);
             }}
             options={options}
             value={String(v || def.default_value)}
@@ -73,7 +77,7 @@ export const PropertyComponent = observer((props: { property: Property }) => {
           <Box maxWidth={260}>
             <SingleSelect
               onChange={(e) => {
-                p.value = e;
+                updatePropertyValue(p, e);
               }}
               options={options}
               value={v}
@@ -87,7 +91,7 @@ export const PropertyComponent = observer((props: { property: Property }) => {
             defaultValue={def.default_value ?? undefined}
             isDisabled={props.property.isDisabled}
             onChange={(e) => {
-              p.value = e.target.value;
+              updatePropertyValue(p, e.target.value);
             }}
             spellCheck={false}
             value={String(v)}
@@ -101,7 +105,7 @@ export const PropertyComponent = observer((props: { property: Property }) => {
       inputComp = (
         <SecretInput
           onChange={(e) => {
-            p.value = e;
+            updatePropertyValue(p, e);
           }}
           updating={p.crud === 'update'}
           value={String(v ?? '')}
@@ -116,7 +120,7 @@ export const PropertyComponent = observer((props: { property: Property }) => {
       inputComp = (
         <NumberInput
           onChange={(e) => {
-            p.value = e;
+            updatePropertyValue(p, e);
           }}
           value={Number(v)}
         />
@@ -128,7 +132,7 @@ export const PropertyComponent = observer((props: { property: Property }) => {
         <Switch
           isChecked={Boolean(v)}
           onChange={(e) => {
-            p.value = e.target.checked;
+            updatePropertyValue(p, e.target.checked);
           }}
         />
       );
@@ -140,7 +144,7 @@ export const PropertyComponent = observer((props: { property: Property }) => {
           <CommaSeparatedStringList
             defaultValue={String(v)}
             onChange={(x) => {
-              p.value = x;
+              updatePropertyValue(p, x);
             }}
           />
         );
@@ -149,7 +153,7 @@ export const PropertyComponent = observer((props: { property: Property }) => {
           <Input
             defaultValue={def.default_value ?? undefined}
             onChange={(e) => {
-              p.value = e.target.value;
+              updatePropertyValue(p, e.target.value);
             }}
             value={String(v)}
           />
@@ -162,7 +166,7 @@ export const PropertyComponent = observer((props: { property: Property }) => {
         <Input
           defaultValue={def.default_value ?? undefined}
           onChange={(e) => {
-            p.value = e.target.value;
+            updatePropertyValue(p, e.target.value);
           }}
           value={String(v)}
         />
@@ -173,11 +177,11 @@ export const PropertyComponent = observer((props: { property: Property }) => {
   inputComp = <ErrorWrapper input={inputComp} property={p} />;
   // Wrap name and input element
   return (
-    <Box className={inputSizeToClass[def.width]} mt="6">
+    <Box className={inputSizeToClass[def.width]} data-testid={`property-${p.name}`} mt="6">
       {inputComp}
     </Box>
   );
-});
+};
 
 const inputSizeToClass = {
   [PropertyWidth.None]: 'none',

@@ -11,14 +11,13 @@
 
 import { Box, Button, DataTable, Text, Tooltip } from '@redpanda-data/ui';
 import { Link } from '@tanstack/react-router';
-import { makeObservable, observable } from 'mobx';
-import { observer } from 'mobx-react';
+import { useCallback, useState } from 'react';
 
 import { ClusterStatisticsCard, ConnectorClass, NotConfigured, TaskState, TasksColumn } from './helper';
 import { isEmbedded } from '../../../config';
 import { appGlobal } from '../../../state/app-global';
 import { api } from '../../../state/backend-api';
-import type { ClusterAdditionalInfo, ClusterConnectorInfo } from '../../../state/rest-interfaces';
+import type { ClusterAdditionalInfo, ClusterConnectorInfo, ClusterConnectors } from '../../../state/rest-interfaces';
 import { uiSettings } from '../../../state/ui';
 import { DefaultSkeleton } from '../../../utils/tsx-utils';
 import PageContent from '../../misc/page-content';
@@ -26,14 +25,11 @@ import SearchBar from '../../misc/search-bar';
 import Section from '../../misc/section';
 import { PageComponent, type PageInitHelper, type PageProps } from '../page';
 
-@observer
 class KafkaClusterDetails extends PageComponent<{ clusterName: string }> {
-  @observable placeholder = 5;
-  @observable filteredResults: ClusterConnectorInfo[] = [];
+  placeholder = 5;
 
   constructor(p: Readonly<PageProps<{ clusterName: string }>>) {
     super(p);
-    makeObservable(this);
   }
 
   initPage(p: PageInitHelper): void {
@@ -51,17 +47,6 @@ class KafkaClusterDetails extends PageComponent<{ clusterName: string }> {
 
     const clusterName = decodeURIComponent(this.props.clusterName);
     api.refreshClusterAdditionalInfo(clusterName, force);
-  }
-
-  isFilterMatch(filter: string, item: ClusterConnectorInfo): boolean {
-    try {
-      const quickSearchRegExp = new RegExp(uiSettings.connectorsList.quickSearch, 'i');
-      return Boolean(item.name.match(quickSearchRegExp)) || Boolean(item.class.match(quickSearchRegExp));
-    } catch (_e) {
-      // biome-ignore lint/suspicious/noConsole: intentional console usage
-      console.warn('Invalid expression');
-      return item.name.toLowerCase().includes(filter.toLowerCase());
-    }
   }
 
   render() {
@@ -86,93 +71,7 @@ class KafkaClusterDetails extends PageComponent<{ clusterName: string }> {
         {/* Main Card */}
         <Section>
           {/* Connectors List */}
-          <div>
-            <div style={{ display: 'flex', marginBottom: '.5em' }}>
-              <Tooltip
-                hasArrow={true}
-                isDisabled={cluster?.canEditCluster !== false && api.userData?.canCreateTopics !== false}
-                label={
-                  api.userData?.canCreateTopics === false
-                    ? "You don't have permission to create connectors"
-                    : "You don't have 'editConnectCluster' permissions for this connect cluster"
-                }
-                placement="top"
-              >
-                {cluster?.canEditCluster === false || api.userData?.canCreateTopics === false ? (
-                  <Button isDisabled variant="solid">
-                    Create connector
-                  </Button>
-                ) : (
-                  <Link params={{ clusterName }} to="/connect-clusters/$clusterName/create-connector">
-                    <Button variant="solid">Create connector</Button>
-                  </Link>
-                )}
-              </Tooltip>
-            </div>
-
-            <Box my={5}>
-              <SearchBar<ClusterConnectorInfo>
-                dataSource={() => connectors ?? []}
-                filterText={uiSettings.connectorsList.quickSearch}
-                isFilterMatch={this.isFilterMatch}
-                onFilteredDataChanged={(data) => {
-                  this.filteredResults = data;
-                }}
-                onQueryChanged={(filterText) => {
-                  uiSettings.connectorsList.quickSearch = filterText;
-                }}
-                placeholderText="Enter search term/regex"
-              />
-            </Box>
-
-            <DataTable<ClusterConnectorInfo>
-              columns={[
-                {
-                  header: 'Connector',
-                  accessorKey: 'name',
-                  cell: ({ row: { original } }) => (
-                    <Link
-                      params={{
-                        clusterName: encodeURIComponent(clusterName),
-                        connector: encodeURIComponent(original.name),
-                      }}
-                      to="/connect-clusters/$clusterName/$connector"
-                    >
-                      <Text whiteSpace="break-spaces" wordBreak="break-word">
-                        {original.name}
-                      </Text>
-                    </Link>
-                  ),
-                  size: Number.POSITIVE_INFINITY,
-                },
-                {
-                  header: 'Class',
-                  accessorKey: 'class',
-                  cell: ({ row: { original } }) => <ConnectorClass observable={original} />,
-                },
-                {
-                  header: 'Type',
-                  accessorKey: 'type',
-                  size: 100,
-                },
-                {
-                  header: 'State',
-                  accessorKey: 'state',
-                  size: 120,
-                  cell: ({ row: { original } }) => <TaskState observable={original} />,
-                },
-                {
-                  header: 'Tasks',
-                  size: 120,
-                  cell: ({ row: { original } }) => <TasksColumn observable={original} />,
-                },
-              ]}
-              data={this.filteredResults}
-              defaultPageSize={10}
-              pagination
-              sorting
-            />
-          </div>
+          <ConnectorsList clusterName={clusterName} connectors={connectors ?? []} cluster={cluster} />
 
           {/* Plugin List */}
           <div style={{ marginTop: '2em', display: isEmbedded() ? 'none' : 'block' }}>
@@ -206,5 +105,120 @@ class KafkaClusterDetails extends PageComponent<{ clusterName: string }> {
     );
   }
 }
+
+const ConnectorsList = ({ clusterName, connectors, cluster }: { clusterName: string; connectors: ClusterConnectorInfo[]; cluster?: ClusterConnectors }) => {
+  const [filteredResults, setFilteredResults] = useState<ClusterConnectorInfo[]>([]);
+  const [searchText, setSearchText] = useState(uiSettings.connectorsList.quickSearch);
+
+  const canCreateConnector = api.userData?.canCreateTopics !== false;
+  const canEditCluster = cluster?.canEditCluster !== false;
+  const canCreate = canCreateConnector && canEditCluster;
+  const createTooltipLabel = !canCreateConnector
+    ? "You don't have permission to create connectors"
+    : "You don't have 'editConnectCluster' permissions for this connect cluster";
+
+  const dataSource = useCallback(() => connectors, [connectors]);
+
+  const isFilterMatch = useCallback((filter: string, item: ClusterConnectorInfo): boolean => {
+    try {
+      const quickSearchRegExp = new RegExp(filter, 'i');
+      const nameMatch = item.name.match(quickSearchRegExp) !== null;
+      const classMatch = item.class.match(quickSearchRegExp) !== null;
+      if (nameMatch) return true;
+      return classMatch;
+    } catch (_e) {
+      // biome-ignore lint/suspicious/noConsole: intentional console usage
+      console.warn('Invalid expression');
+      return item.name.toLowerCase().includes(filter.toLowerCase());
+    }
+  }, []);
+
+  const onQueryChanged = useCallback((filterText: string) => {
+    setSearchText(filterText);
+    uiSettings.connectorsList.quickSearch = filterText;
+  }, []);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', marginBottom: '.5em' }}>
+        <Tooltip
+          hasArrow={true}
+          isDisabled={canCreate}
+          label={createTooltipLabel}
+          placement="top"
+        >
+          {canCreate ? (
+            <Link params={{ clusterName }} to="/connect-clusters/$clusterName/create-connector">
+              <Button variant="solid">Create connector</Button>
+            </Link>
+          ) : (
+            <Button isDisabled variant="solid">
+              Create connector
+            </Button>
+          )}
+        </Tooltip>
+      </div>
+
+      <Box my={5}>
+        <SearchBar<ClusterConnectorInfo>
+          dataSource={dataSource}
+          filterText={searchText}
+          isFilterMatch={isFilterMatch}
+          onFilteredDataChanged={setFilteredResults}
+          onQueryChanged={onQueryChanged}
+          placeholderText="Enter search term/regex"
+        />
+      </Box>
+
+      <DataTable<ClusterConnectorInfo>
+        columns={[
+          {
+            header: 'Connector',
+            accessorKey: 'name',
+            cell: ({ row: { original } }) => (
+              <Link
+                params={{
+                  clusterName,
+                  connector: original.name,
+                }}
+                to="/connect-clusters/$clusterName/$connector"
+              >
+                <Text whiteSpace="break-spaces" wordBreak="break-word">
+                  {original.name}
+                </Text>
+              </Link>
+            ),
+            size: Number.POSITIVE_INFINITY,
+          },
+          {
+            header: 'Class',
+            accessorKey: 'class',
+            cell: ({ row: { original } }) => <ConnectorClass observable={original} />,
+          },
+          {
+            header: 'Type',
+            accessorKey: 'type',
+            size: 100,
+          },
+          {
+            header: 'State',
+            accessorKey: 'state',
+            size: 120,
+            cell: ({ row: { original } }) => <TaskState observable={original} />,
+          },
+          {
+            header: 'Tasks',
+            size: 120,
+            cell: ({ row: { original } }) => <TasksColumn observable={original} />,
+          },
+        ]}
+        data={filteredResults}
+        defaultPageSize={10}
+        pagination
+        sorting
+      />
+    </div>
+  );
+};
 
 export default KafkaClusterDetails;

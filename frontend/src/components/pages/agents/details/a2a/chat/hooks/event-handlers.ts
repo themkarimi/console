@@ -400,9 +400,15 @@ export const handleArtifactUpdateEvent = (
   }
 
   // Build message with current blocks + active artifact block (if streaming)
+  // IMPORTANT: Clone the active artifact block so React detects the change.
+  // The activeTextBlock is mutated in place during streaming, so pushing the
+  // same object reference causes React to skip re-renders.
   const currentBlocks = [...state.contentBlocks];
   if (state.activeTextBlock && state.activeTextBlock.type === 'artifact') {
-    currentBlocks.push(state.activeTextBlock);
+    currentBlocks.push({
+      ...state.activeTextBlock,
+      parts: state.activeTextBlock.parts.map((p) => ({ ...p })),
+    });
   }
 
   const updatedMessage = buildMessageWithContentBlocks({
@@ -413,21 +419,4 @@ export const handleArtifactUpdateEvent = (
     taskStartIndex: state.taskIdCapturedAtBlockIndex,
   });
   onMessageUpdate(updatedMessage);
-};
-
-/**
- * Handle text-delta event to accumulate streaming text
- * NOTE: Text-delta is now only for artifacts (protocol compliant)
- * Regular messages come via status-update events with message.parts
- */
-export const handleTextDeltaEvent = (
-  _textDelta: string,
-  _state: StreamingState,
-  _assistantMessage: ChatMessage,
-  _onMessageUpdate: (message: ChatMessage) => void
-): void => {
-  // Text-delta events are deprecated for regular messages
-  // They are only used for artifact streaming now (handled separately)
-  // If we receive text-delta, it's likely duplicate artifact content
-  // Skip processing to avoid duplicate text blocks
 };

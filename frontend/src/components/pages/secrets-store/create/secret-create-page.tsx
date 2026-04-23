@@ -27,7 +27,6 @@ import {
 import { Heading, Text } from 'components/redpanda-ui/components/typography';
 import { TagsFieldList } from 'components/ui/tag/tags-field-list';
 import { Loader2 } from 'lucide-react';
-import { runInAction } from 'mobx';
 import { CreateSecretRequestSchema } from 'protogen/redpanda/api/dataplane/v1/secret_pb';
 import { useEffect } from 'react';
 import { Controller, useFieldArray, useForm } from 'react-hook-form';
@@ -61,12 +60,10 @@ export const SecretCreatePage = () => {
   });
 
   useEffect(() => {
-    runInAction(() => {
-      uiState.pageTitle = 'Create Secret';
-      uiState.pageBreadcrumbs.pop();
-      uiState.pageBreadcrumbs.push({ title: 'Secrets Store', linkTo: '/secrets' });
-      uiState.pageBreadcrumbs.push({ title: 'Create', linkTo: '/secrets/create' });
-    });
+    uiState.pageTitle = 'Create Secret';
+    uiState.pageBreadcrumbs.pop();
+    uiState.pageBreadcrumbs.push({ title: 'Secrets Store', linkTo: '/secrets' });
+    uiState.pageBreadcrumbs.push({ title: 'Create', linkTo: '/secrets/create' });
   }, []);
 
   const onSubmit = async (values: SecretCreateFormValues) => {
@@ -147,6 +144,7 @@ export const SecretCreatePage = () => {
             <Field data-invalid={fieldState.invalid}>
               <FieldLabel required>Scopes</FieldLabel>
               <MultiSelect
+                items={SCOPE_OPTIONS}
                 onValueChange={(values) => field.onChange(values.map(Number))}
                 value={field.value.map(String)}
               >
@@ -156,8 +154,11 @@ export const SecretCreatePage = () => {
                 <MultiSelectContent>
                   <MultiSelectList>
                     {SCOPE_OPTIONS.map((option) => (
-                      <MultiSelectItem key={option.value} {...option}>
-                        {option.label}
+                      <MultiSelectItem key={option.value} label={option.label} value={option.value}>
+                        <span className="flex items-center gap-2">
+                          <option.icon className="size-4" />
+                          {option.label}
+                        </span>
                       </MultiSelectItem>
                     ))}
                   </MultiSelectList>

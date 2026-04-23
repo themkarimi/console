@@ -25,7 +25,7 @@ import {
   Stack,
   Text,
 } from '@redpanda-data/ui';
-import type { FC } from 'react';
+import { type FC, useState } from 'react';
 
 import type { ColumnList, TimestampDisplayFormat } from '../../../../../state/ui';
 import { useTopicSettingsStore } from '../../../../../stores/topic-settings-store';
@@ -51,6 +51,7 @@ export const ColumnSettings: FC<{
   const topicSettings = perTopicSettings.find((t) => t.topicName === topicName);
   const previewColumnFields = topicSettings?.previewColumnFields ?? [];
   const previewTimestamps = topicSettings?.previewTimestamps ?? 'default';
+  const [previewTime] = useState(() => Date.now());
 
   return (
     <Modal
@@ -128,7 +129,7 @@ export const ColumnSettings: FC<{
             </GridItem>
             <GridItem>
               <Label text="Preview">
-                <TimestampDisplay format={previewTimestamps} unixEpochMillisecond={Date.now()} />
+                <TimestampDisplay format={previewTimestamps} unixEpochMillisecond={previewTime} />
               </Label>
             </GridItem>
           </Grid>

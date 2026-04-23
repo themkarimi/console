@@ -30,11 +30,24 @@ export const inputVariants = cva(
   }
 );
 
+const stepControlVariants = cva('flex items-center justify-center', {
+  variants: {
+    size: {
+      sm: 'size-8 [&_svg]:size-3.5',
+      md: 'size-9 [&_svg]:size-4',
+      lg: 'size-10 [&_svg]:size-5',
+    },
+  },
+  defaultVariants: {
+    size: 'md',
+  },
+});
+
 const inputContainerVariants = cva('', {
   variants: {
     layout: {
       standard: 'relative flex items-center',
-      password: 'relative flex flex-1',
+      password: 'relative flex w-full flex-1',
       number: 'flex items-center gap-2',
     },
   },
@@ -43,7 +56,7 @@ const inputContainerVariants = cva('', {
   },
 });
 
-interface InputProps
+export interface InputProps
   extends Omit<React.ComponentProps<'input'>, 'size'>,
     VariantProps<typeof inputVariants>,
     SharedProps {
@@ -117,6 +130,10 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
 
     const { increment, decrement, handleInputChange } = useNumberInputHandlers(value, setValue, step, props.onChange);
 
+    // Map input size to a button icon size that fits comfortably inside the input
+    // sm (h-8/32px) → icon-xs (24px), md (h-9/36px) → icon-sm (32px), lg (h-10/40px) → icon-sm (32px)
+    const passwordToggleSize = size === 'sm' ? ('icon-xs' as const) : ('icon-sm' as const);
+
     let positionClasses = 'rounded-md';
     if (attached && groupPosition === 'first') {
       positionClasses = 'rounded-r-none rounded-l-md border-r-0';
@@ -181,6 +198,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
               <Button
                 disabled={props.disabled || readOnly}
                 onClick={() => setShowPassword(!showPassword)}
+                size={passwordToggleSize}
                 type="button"
                 variant="ghost"
               >
@@ -191,22 +209,22 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           {shouldShowControls ? (
             <div className="flex flex-row gap-1">
               <Button
+                className={stepControlVariants({ size })}
                 disabled={props.disabled || readOnly}
                 onClick={increment}
-                size={size}
                 type="button"
                 variant="outline"
               >
-                <Plus className="h-4 w-4" />
+                <Plus />
               </Button>
               <Button
+                className={stepControlVariants({ size })}
                 disabled={props.disabled || readOnly}
                 onClick={decrement}
-                size={size}
                 type="button"
                 variant="outline"
               >
-                <Minus className="h-4 w-4" />
+                <Minus />
               </Button>
             </div>
           ) : null}
@@ -216,7 +234,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
   }
 );
 
-const inputEndClassNames = 'absolute top-1/2 -translate-y-1/2 z-10 pointer-events-none right-2';
+const inputEndClassNames = 'absolute inset-y-0 right-2 z-10 flex items-center pointer-events-none';
 
 const InputContext = createContext<{
   setStartWidth: (width: number) => void;
@@ -252,7 +270,7 @@ const InputStart = ({ children, className, ...props }: { children: React.ReactNo
 
   return (
     <span
-      className={cn('pointer-events-none absolute top-1/2 left-2 z-10 -translate-y-1/2', className)}
+      className={cn('pointer-events-none absolute inset-y-0 left-2 z-10 flex items-center', className)}
       ref={startRef}
       {...props}
     >

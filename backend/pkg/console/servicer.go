@@ -86,15 +86,21 @@ type Servicer interface {
 	DescribeClientQuotas(ctx context.Context, req *kmsg.DescribeClientQuotasRequest) (*kmsg.DescribeClientQuotasResponse, error)
 	// AlterClientQuotas proxies the request/response for altering client quotas via the Kafka API.
 	AlterClientQuotas(ctx context.Context, req *kmsg.AlterClientQuotasRequest) (*kmsg.AlterClientQuotasResponse, error)
+	// DescribeUserSCRAMCredentials describes SCRAM credentials for the given users (or all users if none specified).
+	DescribeUserSCRAMCredentials(ctx context.Context, users ...string) (kadm.DescribedUserSCRAMs, error)
+	// AlterUserSCRAMs upserts and/or deletes SCRAM credentials.
+	AlterUserSCRAMs(ctx context.Context, del []kadm.DeleteSCRAM, upsert []kadm.UpsertSCRAM) (kadm.AlteredUserSCRAMs, error)
 }
 
 // SchemaRegistryServicer is the interface for schema registry servicer
 type SchemaRegistryServicer interface {
-	GetSchemaRegistryMode(ctx context.Context) (*SchemaRegistryMode, error)
+	GetSchemaRegistryMode(ctx context.Context, subject string) (*SchemaRegistryMode, error)
+	PutSchemaRegistryMode(ctx context.Context, mode sr.Mode, subject string) (*SchemaRegistryMode, error)
+	DeleteSchemaRegistrySubjectMode(ctx context.Context, subject string) error
 	GetSchemaRegistryConfig(ctx context.Context, subject string) (*SchemaRegistryConfig, error)
 	PutSchemaRegistryConfig(ctx context.Context, subject string, compatibility sr.SetCompatibility) (*SchemaRegistryConfig, error)
 	DeleteSchemaRegistrySubjectConfig(ctx context.Context, subject string) error
-	GetSchemaRegistrySubjects(ctx context.Context) ([]SchemaRegistrySubject, error)
+	GetSchemaRegistrySubjects(ctx context.Context, subjectPrefix string) ([]SchemaRegistrySubject, error)
 	GetSchemaRegistrySubjectDetails(ctx context.Context, subjectName string, version string) (*SchemaRegistrySubjectDetails, error)
 	GetSchemaRegistrySchemaReferencedBy(ctx context.Context, subjectName string, version int) ([]SchemaReference, error)
 	DeleteSchemaRegistrySubject(ctx context.Context, subjectName string, deletePermanently bool) (*SchemaRegistryDeleteSubjectResponse, error)
@@ -102,7 +108,8 @@ type SchemaRegistryServicer interface {
 	GetSchemaRegistrySchemaTypes(ctx context.Context) (*SchemaRegistrySchemaTypes, error)
 	CreateSchemaRegistrySchema(ctx context.Context, subjectName string, schema sr.Schema, params CreateSchemaRequestParams) (*CreateSchemaResponse, error)
 	ValidateSchemaRegistrySchema(ctx context.Context, subjectName string, version int, schema sr.Schema) (*SchemaRegistrySchemaValidation, error)
-	GetSchemaUsagesByID(ctx context.Context, schemaID int) ([]SchemaVersion, error)
+	GetSchemaUsagesByID(ctx context.Context, schemaID int, subject string) ([]SchemaVersion, error)
+	GetSchemaRegistryContexts(ctx context.Context) ([]SchemaRegistryContext, error)
 
 	// Custom Redpanda-only methods for managing ACLs within the schema registry.
 

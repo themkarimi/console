@@ -33,7 +33,7 @@ import {
   type ServiceAccountSelectorRef,
 } from 'components/ui/service-account/service-account-selector';
 import { TagsFieldList } from 'components/ui/tag/tags-field-list';
-import { isFeatureFlagEnabled } from 'config';
+import { config } from 'config';
 import { Loader2 } from 'lucide-react';
 import { Scope } from 'protogen/redpanda/api/dataplane/v1/secret_pb';
 import {
@@ -41,6 +41,7 @@ import {
   AIAgent_MCPServerSchema,
   type AIAgent_Provider,
   AIAgent_Provider_AnthropicSchema,
+  AIAgent_Provider_BedrockSchema,
   AIAgent_Provider_GoogleSchema,
   AIAgent_Provider_OpenAICompatibleSchema,
   AIAgent_Provider_OpenAISchema,
@@ -51,10 +52,10 @@ import {
   CreateAIAgentRequestSchema,
 } from 'protogen/redpanda/api/dataplane/v1alpha3/ai_agent_pb';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Controller, useFieldArray, useForm } from 'react-hook-form';
+import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { useCreateAIAgentMutation } from 'react-query/api/ai-agent';
-import { useListGatewaysQuery } from 'react-query/api/ai-gateway';
-import { useListMCPServersQuery } from 'react-query/api/remote-mcp';
+import { useListLLMProvidersQuery } from 'react-query/api/aigw/llm-providers';
+import { useListAigwMCPServersQuery } from 'react-query/api/aigw/mcp-servers';
 import { useCreateSecretMutation, useListSecretsQuery } from 'react-query/api/secret';
 import { toast } from 'sonner';
 import {
@@ -70,43 +71,14 @@ export const AIAgentCreatePage = () => {
   const navigate = useNavigate();
   const { mutateAsync: createAgent, isPending: isCreateAgentPending } = useCreateAIAgentMutation();
   const { data: secretsData } = useListSecretsQuery();
-  const { data: mcpServersData } = useListMCPServersQuery();
+  const { data: mcpServersData } = useListAigwMCPServersQuery(undefined, { enabled: !!config.aigwUrl });
+  const { data: llmProvidersData } = useListLLMProvidersQuery(undefined, { enabled: !!config.aigwUrl });
   const { mutateAsync: createSecret, isPending: isCreateSecretPending } = useCreateSecretMutation({
     skipInvalidation: true,
   });
 
-  // Feature flag: when true, use legacy API key mode (hardcoded providers)
-  const isLegacyApiKeyMode = isFeatureFlagEnabled('enableApiKeyConfigurationAgent');
-
-  // Gateway detection and list query (using v1 API from ai-gateway module)
-  // Only fetch when NOT in legacy mode
-  // Note: System-managed gateways are automatically excluded by the query hook
-  const { data: gatewaysData, isLoading: isLoadingGateways } = useListGatewaysQuery(
-    {},
-    { enabled: !isLegacyApiKeyMode }
-  );
-
-  const hasGatewayDeployed = useMemo(() => {
-    if (isLegacyApiKeyMode || isLoadingGateways) {
-      return false;
-    }
-    return Boolean(gatewaysData?.gateways && gatewaysData.gateways.length > 0);
-  }, [isLegacyApiKeyMode, gatewaysData, isLoadingGateways]);
-
-  const availableGateways = useMemo(() => {
-    if (isLegacyApiKeyMode || !gatewaysData?.gateways) {
-      return [];
-    }
-    return gatewaysData.gateways.map((gw) => {
-      // Extract gateway ID from name (format: "gateways/{gateway_id}")
-      const gatewayId = gw.name.split('/').pop() || gw.name;
-      return {
-        id: gatewayId,
-        displayName: gw.displayName,
-        description: gw.description,
-      };
-    });
-  }, [isLegacyApiKeyMode, gatewaysData]);
+  // Determine if AI Gateway is deployed based on config
+  const hasAigwDeployed = !!config.aigwUrl;
 
   // Ref to ServiceAccountSelector to call createServiceAccount
   const serviceAccountSelectorRef = useRef<ServiceAccountSelectorRef>(null);
@@ -126,29 +98,25 @@ export const AIAgentCreatePage = () => {
   });
 
   // Track the display name to auto-generate service account name
-  const displayName = form.watch('displayName');
-  const serviceAccountName = form.watch('serviceAccountName');
+  const displayName = useWatch({
+    control: form.control,
+    name: 'displayName',
+  });
+  const serviceAccountName = useWatch({
+    control: form.control,
+    name: 'serviceAccountName',
+  });
 
   // Auto-generate service account name when agent name changes
   useEffect(() => {
-    if (displayName) {
-      const generatedName = generateServiceAccountName(displayName, 'agent');
-      const currentValue = form.getValues('serviceAccountName');
-      const prefix = getServiceAccountNamePrefix('agent');
-
-      // Only update if the field is empty or matches the previous auto-generated pattern
-      if (!currentValue || currentValue.startsWith(prefix)) {
-        form.setValue('serviceAccountName', generatedName, { shouldValidate: false });
-      }
+    const generatedName = displayName ? generateServiceAccountName(displayName, 'agent') : '';
+    const currentValue = form.getValues('serviceAccountName');
+    const prefix = getServiceAccountNamePrefix('agent');
+    const shouldAutoGenerate = generatedName && (!currentValue || currentValue.startsWith(prefix));
+    if (shouldAutoGenerate) {
+      form.setValue('serviceAccountName', generatedName, { shouldValidate: false });
     }
   }, [displayName, form]);
-
-  // Auto-select first gateway when gateways are available (only if not in legacy mode)
-  useEffect(() => {
-    if (!isLegacyApiKeyMode && availableGateways.length > 0 && !form.getValues('gatewayId')) {
-      form.setValue('gatewayId', availableGateways[0].id);
-    }
-  }, [isLegacyApiKeyMode, availableGateways, form]);
 
   const {
     fields: tagFields,
@@ -173,7 +141,10 @@ export const AIAgentCreatePage = () => {
   }, [secretsData]);
 
   // Auto-detect and prefill API key secret based on provider
-  const selectedProvider = form.watch('provider');
+  const selectedProvider = useWatch({
+    control: form.control,
+    name: 'provider',
+  });
   useEffect(() => {
     // Only auto-select if the field is currently empty
     if (form.getValues('apiKeySecret')) {
@@ -376,6 +347,22 @@ export const AIAgentCreatePage = () => {
           },
         });
         break;
+      case 'bedrock': {
+        // Region lives on the gateway's LLMProvider config; mirror it into the
+        // agent's Bedrock config so proto validation (region required) passes.
+        const selectedGwProvider = llmProvidersData?.llmProviders?.find((p) => p.name === values.llmProvider);
+        const region =
+          selectedGwProvider?.providerConfig?.case === 'bedrockConfig'
+            ? selectedGwProvider.providerConfig.value.region
+            : '';
+        providerConfig = create(AIAgent_ProviderSchema, {
+          provider: {
+            case: 'bedrock',
+            value: create(AIAgent_Provider_BedrockSchema, { region }),
+          },
+        });
+        break;
+      }
       default: // openai
         providerConfig = create(AIAgent_ProviderSchema, {
           provider: {
@@ -389,9 +376,9 @@ export const AIAgentCreatePage = () => {
     }
 
     const gatewayConfig =
-      values.gatewayId && values.gatewayId.trim() !== ''
+      values.llmProvider && values.llmProvider.trim() !== ''
         ? create(AIAgent_GatewayConfigSchema, {
-            virtualGatewayId: values.gatewayId,
+            llmProvider: values.llmProvider,
           })
         : undefined;
 
@@ -434,7 +421,12 @@ export const AIAgentCreatePage = () => {
         <Heading level={1}>Create AI Agent</Heading>
       </header>
 
-      <form className="w-full" onSubmit={form.handleSubmit(onSubmit)}>
+      <form
+        className="w-full"
+        onSubmit={(e) => {
+          form.handleSubmit(onSubmit)(e);
+        }}
+      >
         <div className="space-y-4">
           <div className="space-y-4">
             {/* Basic Information and OpenAI Configuration - Side by Side */}
@@ -509,7 +501,6 @@ export const AIAgentCreatePage = () => {
                 </CardHeader>
                 <CardContent>
                   <LLMConfigSection
-                    availableGateways={availableGateways}
                     availableSecrets={availableSecrets}
                     fieldNames={{
                       provider: 'provider',
@@ -517,14 +508,13 @@ export const AIAgentCreatePage = () => {
                       apiKeySecret: 'apiKeySecret',
                       baseUrl: 'baseUrl',
                       maxIterations: 'maxIterations',
-                      gatewayId: 'gatewayId',
+                      llmProvider: 'llmProvider',
                     }}
                     form={form}
-                    hasGatewayDeployed={hasGatewayDeployed}
-                    isLoadingGateways={isLoadingGateways}
+                    hasAigwDeployed={hasAigwDeployed}
                     mode="create"
                     scopes={[Scope.MCP_SERVER, Scope.AI_AGENT]}
-                    showBaseUrl={form.watch('provider') === 'openaiCompatible'}
+                    showBaseUrl={selectedProvider === 'openaiCompatible'}
                     showMaxIterations={true}
                   />
                 </CardContent>

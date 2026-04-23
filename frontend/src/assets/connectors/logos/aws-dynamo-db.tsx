@@ -2,11 +2,9 @@ import type React from 'react';
 
 export const AWSDynamoDbLogo = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
-    height="256px"
     preserveAspectRatio="xMidYMid"
     version="1.1"
     viewBox="0 0 256 256"
-    width="256px"
     xlinkHref="http://www.w3.org/1999/xlink"
     xmlns="http://www.w3.org/2000/svg"
     {...props}
@@ -14,8 +12,8 @@ export const AWSDynamoDbLogo = (props: React.SVGProps<SVGSVGElement>) => (
     <title>AWS DynamoDB</title>
     <defs>
       <linearGradient id="linearGradient-1" x1="0%" x2="100%" y1="100%" y2="0%">
-        <stop offset="0%" stop-color="#2E27AD" />
-        <stop offset="100%" stop-color="#527FFF" />
+        <stop offset="0%" stopColor="#2E27AD" />
+        <stop offset="100%" stopColor="#527FFF" />
       </linearGradient>
     </defs>
     <g>

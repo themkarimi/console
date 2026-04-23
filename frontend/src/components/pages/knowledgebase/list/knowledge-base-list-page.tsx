@@ -23,6 +23,7 @@ import {
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
+  type PaginationState,
   type SortingState,
   type Table as TanstackTable,
   useReactTable,
@@ -41,13 +42,12 @@ import { Input } from 'components/redpanda-ui/components/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from 'components/redpanda-ui/components/table';
 import { Heading, Text } from 'components/redpanda-ui/components/typography';
 import { AlertCircle, Loader2, X } from 'lucide-react';
-import { runInAction } from 'mobx';
 import type { KnowledgeBase } from 'protogen/redpanda/api/dataplane/v1alpha3/knowledge_base_pb';
 import React, { useCallback, useEffect, useMemo } from 'react';
 import { useDeleteKnowledgeBaseMutation, useListKnowledgeBasesQuery } from 'react-query/api/knowledge-base';
 import { useListTopicsQuery } from 'react-query/api/topic';
 import { toast } from 'sonner';
-import { Features } from 'state/supported-features';
+import { useSupportedFeaturesStore } from 'state/supported-features';
 import { uiState } from 'state/ui-state';
 import { formatToastErrorMessageGRPC } from 'utils/toast.utils';
 
@@ -340,22 +340,22 @@ function KnowledgeBaseDataTableToolbar({ table }: { table: TanstackTable<Knowled
 }
 
 export const updatePageTitle = () => {
-  runInAction(() => {
-    uiState.pageTitle = 'Knowledge Bases';
-    uiState.pageBreadcrumbs.pop();
-    uiState.pageBreadcrumbs.push({
-      title: 'Knowledge Bases',
-      linkTo: '/knowledgebases',
-      heading: 'Knowledge Bases',
-    });
+  uiState.pageTitle = 'Knowledge Bases';
+  uiState.pageBreadcrumbs.pop();
+  uiState.pageBreadcrumbs.push({
+    title: 'Knowledge Bases',
+    linkTo: '/knowledgebases',
+    heading: 'Knowledge Bases',
   });
 };
 
 export const KnowledgeBaseListPage = () => {
+  const featurePipelinesApi = useSupportedFeaturesStore((s) => s.pipelinesApi);
   const navigate = useNavigate();
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+  const [pagination, setPagination] = React.useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
   const [rowSelection, setRowSelection] = React.useState({});
 
   const {
@@ -365,14 +365,14 @@ export const KnowledgeBaseListPage = () => {
   } = useListKnowledgeBasesQuery(
     {},
     {
-      enabled: Features.pipelinesApi,
+      enabled: featurePipelinesApi,
     }
   );
 
   // Fetch all available topics to match against knowledge base patterns
   const { data: topicsData } = useListTopicsQuery(
     undefined,
-    { enabled: Features.pipelinesApi },
+    { enabled: featurePipelinesApi },
     { hideInternalTopics: true }
   );
 
@@ -393,7 +393,7 @@ export const KnowledgeBaseListPage = () => {
   }, []);
 
   useEffect(() => {
-    if (error && Features.pipelinesApi) {
+    if (error && featurePipelinesApi) {
       const errorStr = String(error);
       if (!errorStr.includes('404')) {
         toast.error('Failed to load knowledge bases', {
@@ -401,7 +401,7 @@ export const KnowledgeBaseListPage = () => {
         });
       }
     }
-  }, [error]);
+  }, [error, featurePipelinesApi]);
 
   const handleDelete = useCallback(
     async (knowledgeBaseId: string) => {
@@ -459,17 +459,14 @@ export const KnowledgeBaseListPage = () => {
     getFilteredRowModel: getFilteredRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
+    onPaginationChange: setPagination,
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
-    initialState: {
-      pagination: {
-        pageSize: 10,
-      },
-    },
     state: {
       sorting,
       columnFilters,
       columnVisibility,
+      pagination,
       rowSelection,
     },
   });
@@ -518,7 +515,7 @@ export const KnowledgeBaseListPage = () => {
                 </TableRow>
               );
             }
-            if (error && Features.pipelinesApi) {
+            if (error && featurePipelinesApi) {
               const errorStr = String(error);
               if (!errorStr.includes('404')) {
                 return (
