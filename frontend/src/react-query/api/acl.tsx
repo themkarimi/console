@@ -52,12 +52,20 @@ export const useCreateACLMutation = () => {
 
   return useMutation(createACL, {
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: createConnectQueryKey({
-          schema: ACLService.method.listACLs,
-          cardinality: 'finite',
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: createConnectQueryKey({
+            schema: ACLService.method.listACLs,
+            cardinality: 'infinite',
+          }),
         }),
-      });
+        queryClient.invalidateQueries({
+          queryKey: createConnectQueryKey({
+            schema: ACLService.method.listACLs,
+            cardinality: 'finite',
+          }),
+        }),
+      ]);
     },
     onError: (error) =>
       formatToastErrorMessageGRPC({
