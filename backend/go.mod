@@ -66,12 +66,8 @@ require (
 	go.uber.org/mock v0.6.0
 	go.vallahaye.net/connect-gateway v0.11.0
 	golang.org/x/exp v0.0.0-20251113190631-e25ba8c21ef6
-<<<<<<< HEAD
 	golang.org/x/net v0.52.0
 	golang.org/x/oauth2 v0.36.0
-=======
-	golang.org/x/net v0.54.0
->>>>>>> 6fad02912 (Bump Go toolchain to 1.26.3 and x/net to v0.54.0 (Snyk findings))
 	golang.org/x/sync v0.20.0
 	golang.org/x/text v0.37.0
 	google.golang.org/genproto v0.0.0-20260217215200-42d3e9bedb6d
