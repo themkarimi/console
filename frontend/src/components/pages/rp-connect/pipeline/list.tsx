@@ -46,7 +46,7 @@ import { Link, List, ListItem, Text } from 'components/redpanda-ui/components/ty
 import { createFilterFn } from 'components/redpanda-ui/lib/filter-utils';
 import { useDataTableFilter } from 'components/redpanda-ui/lib/use-data-table-filter';
 import { cn } from 'components/redpanda-ui/lib/utils';
-import { DeleteResourceAlertDialog } from 'components/ui/delete-resource-alert-dialog';
+import { DeleteResourceAlertDialog, DeleteResourceMenuItem } from 'components/ui/delete-resource-alert-dialog';
 import { PIPELINE_STATE_OPTIONS, STARTABLE_STATES, STOPPABLE_STATES } from 'components/ui/pipeline/constants';
 import { isEmbedded, isFeatureFlagEnabled } from 'config';
 import { AlertCircle, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
@@ -56,7 +56,7 @@ import {
   StopPipelineRequestSchema,
 } from 'protogen/redpanda/api/console/v1alpha1/pipeline_pb';
 import { type Pipeline as APIPipeline, Pipeline_State } from 'protogen/redpanda/api/dataplane/v1/pipeline_pb';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useKafkaConnectConnectorsQuery } from 'react-query/api/kafka-connect';
 import {
   useDeletePipelineMutation,
@@ -203,6 +203,7 @@ const ActionsCell = memo(
     const canStop = (STOPPABLE_STATES as readonly Pipeline_State[]).includes(pipeline.state);
     const isStarting = pipeline.state === Pipeline_State.STARTING;
     const isStopping = pipeline.state === Pipeline_State.STOPPING;
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
     const handleStart = () => {
       const startRequest = create(StartPipelineRequestSchema, {
@@ -290,19 +291,18 @@ const ActionsCell = memo(
             {canStart ? <DropdownMenuItem onClick={handleStart}>Start</DropdownMenuItem> : null}
             {canStop ? <DropdownMenuItem onClick={handleStop}>Stop</DropdownMenuItem> : null}
             <DropdownMenuSeparator />
-            <DeleteResourceAlertDialog
-              buttonIcon={undefined}
-              buttonText="Delete"
-              buttonVariant="destructive-ghost"
-              isDeleting={isDeletingPipeline}
-              onDelete={handleDelete}
-              resourceId={pipeline.id}
-              resourceName={pipeline.name}
-              resourceType="Pipeline"
-              triggerVariant="dropdown"
-            />
+            <DeleteResourceMenuItem isDeleting={isDeletingPipeline} onSelect={() => setIsDeleteDialogOpen(true)} />
           </DropdownMenuContent>
         </DropdownMenu>
+        <DeleteResourceAlertDialog
+          isDeleting={isDeletingPipeline}
+          onDelete={handleDelete}
+          onOpenChange={setIsDeleteDialogOpen}
+          open={isDeleteDialogOpen}
+          resourceId={pipeline.id}
+          resourceName={pipeline.name}
+          resourceType="Pipeline"
+        />
       </div>
     );
   }
@@ -617,7 +617,7 @@ const PipelineListPageContent = () => {
     // enablePipelineDiagrams: skip wizard, go straight to pipeline editor
     // otherwise: go through wizard (master behavior)
     if (isFeatureFlagEnabled('enablePipelineDiagrams') && isEmbedded()) {
-      navigate({ to: '/rp-connect/create' });
+      navigate({ to: '/rp-connect/create', search: {} as never });
     } else {
       navigate({ to: '/rp-connect/wizard', search: { step: undefined, serverless: undefined } });
     }
