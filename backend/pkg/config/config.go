@@ -42,6 +42,7 @@ type Config struct {
 	Kafka          Kafka        `yaml:"kafka"`
 	Serde          Serde        `yaml:"serde"`
 	SchemaRegistry Schema       `yaml:"schemaRegistry"`
+	SQL            SQL          `yaml:"sql"`
 	Logger         Logging      `yaml:"logger"`
 	Analytics      Analytics    `yaml:"analytics"`
 	Login          Login        `yaml:"login"`
@@ -59,6 +60,7 @@ func (c *Config) RegisterFlags(f *flag.FlagSet) {
 	c.KafkaConnect.RegisterFlags(f)
 	c.SchemaRegistry.RegisterFlags(f)
 	c.Login.RegisterFlags(f)
+	c.SQL.RegisterFlags(f)
 }
 
 // Validate all root and child config structs
@@ -98,6 +100,11 @@ func (c *Config) Validate() error {
 		return err
 	}
 
+	err = c.SQL.Validate()
+	if err != nil {
+		return fmt.Errorf("failed to validate SQL config: %w", err)
+	}
+
 	err = c.Analytics.Validate()
 	if err != nil {
 		return fmt.Errorf("failed to validate Analytics config: %w", err)
@@ -124,6 +131,7 @@ func (c *Config) SetDefaults() {
 	c.Redpanda.SetDefaults()
 	c.Console.SetDefaults()
 	c.KafkaConnect.SetDefaults()
+	c.SQL.SetDefaults()
 	c.Analytics.SetDefaults()
 	c.Login.SetDefaults()
 }
