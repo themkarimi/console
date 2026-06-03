@@ -217,7 +217,7 @@ class RpConnectPipelinesList extends PageComponent<{}> {
                 size: 100,
               },
               {
-                header: 'Pipeline Name',
+                header: 'Pipeline',
                 cell: ({ row: { original } }) => (
                   <Link
                     params={{ pipelineId: encodeURIComponentPercents(original.id) }}
@@ -245,15 +245,6 @@ class RpConnectPipelinesList extends PageComponent<{}> {
                 header: 'State',
                 cell: ({ row: { original } }) => <PipelineStatus status={original.state} />,
               },
-              // {
-              //     header: 'Throughput',
-              //     cell: ({ row: { original } }) => {
-              //         return <>
-              //             <PipelineThroughput pipeline={original} />
-              //         </>
-              //     },
-              //     size: 100,
-              // },
               {
                 header: '',
                 id: 'actions',
