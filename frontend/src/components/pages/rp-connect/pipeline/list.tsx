@@ -67,7 +67,7 @@ import {
 } from 'react-query/api/pipeline';
 import { toast } from 'sonner';
 import { api } from 'state/backend-api';
-import { useResetOnboardingWizardStore } from 'state/onboarding-wizard-store';
+import { useResetRpcnWizardStore } from 'state/rpcn-wizard-store';
 import { formatToastErrorMessageGRPC } from 'utils/toast.utils';
 
 import { TabKafkaConnect } from '../../connect/overview';
@@ -502,7 +502,7 @@ const createColumns = ({
 
 const PipelineListPageContent = () => {
   const navigate = useNavigate();
-  const resetOnboardingWizardStore = useResetOnboardingWizardStore();
+  const resetRpcnWizardStore = useResetRpcnWizardStore();
 
   const {
     data: pipelinesData,
@@ -623,7 +623,7 @@ const PipelineListPageContent = () => {
   });
 
   const handleCreateClick = useCallback(() => {
-    resetOnboardingWizardStore();
+    resetRpcnWizardStore();
     // enablePipelineDiagrams: skip wizard, go straight to pipeline editor
     // otherwise: go through wizard (master behavior)
     if (isFeatureFlagEnabled('enablePipelineDiagrams') && isEmbedded()) {
@@ -631,7 +631,7 @@ const PipelineListPageContent = () => {
     } else {
       navigate({ to: '/rp-connect/wizard', search: { step: undefined, serverless: undefined } });
     }
-  }, [resetOnboardingWizardStore, navigate]);
+  }, [resetRpcnWizardStore, navigate]);
 
   if (isLoading) {
     return <PipelineListSkeleton />;
