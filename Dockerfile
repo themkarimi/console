@@ -9,7 +9,8 @@ RUN npm install -g bun
 RUN apk update && apk add --no-cache git
 # Install dependencies (copy manifests first for better layer caching)
 COPY frontend/package.json frontend/bun.lock* frontend/yarn.lock* ./
-RUN bun install --ignore-scripts
+COPY frontend/patches/ ./patches/
+RUN bun install --ignore-scripts --frozen-lockfile
 
 # Copy the rest of the frontend source and build
 COPY frontend/ ./
