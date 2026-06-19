@@ -233,7 +233,7 @@ const ConfigurationEditor: FC<ConfigurationEditorProps> = (props) => {
   };
 
   const topic = props.targetTopic;
-  const hasEditPermissions = topic ? (api.topicPermissions.get(topic)?.canEditTopicConfig ?? (api.userData?.canPatchConfigs !== false)) : (api.userData?.canPatchConfigs !== false);
+  const hasEditPermissions = topic ? (topicPermissions?.canEditTopicConfig ?? (api.userData?.canPatchConfigs !== false)) : (api.userData?.canPatchConfigs !== false);
 
   let entries = props.entries;
   if (filter) {
