@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import RequireAuth from './require-auth';
 import { config as appConfig } from '../config';
 import { useApiStore } from '../state/backend-api';
+import { useUIStateStore } from '../state/ui-state';
 import { render } from '../test-utils';
 import { AppFeatures } from '../utils/env';
 
@@ -52,6 +53,9 @@ describe('RequireAuth', () => {
       useApiStore.setState({ userData: undefined, userDataError: null, isUserDataFetchInProgress: false });
     });
     setPath('/');
+    act(() => {
+      useUIStateStore.setState({ pathName: '' });
+    });
   });
 
   test('renders /trial-expired instead of a blank screen when the redirect leaves userData unresolved', () => {
@@ -119,5 +123,28 @@ describe('RequireAuth', () => {
     });
 
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+  });
+
+  test('renders the login page once the router lands on /login, instead of the pre-login placeholder', () => {
+    setPath('/topics');
+    useApiStore.setState({ userData: null });
+
+    render(
+      <RequireAuth>
+        <div data-testid="login-content">login page</div>
+      </RequireAuth>
+    );
+
+    // Redirect issued, placeholder shown while the navigation is in flight.
+    expect(screen.queryByTestId('login-content')).not.toBeInTheDocument();
+
+    // RouterSync mirrors the committed router location into the UI store. The
+    // browser URL still lags behind here on purpose: reading it instead of the
+    // router path is what used to leave the user on a blank grey screen.
+    act(() => {
+      useUIStateStore.setState({ pathName: '/login' });
+    });
+
+    expect(screen.getByTestId('login-content')).toBeInTheDocument();
   });
 });

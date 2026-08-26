@@ -11,7 +11,7 @@
 
 import type { Transport } from '@connectrpc/connect';
 import type { QueryClient } from '@tanstack/react-query';
-import { createRootRouteWithContext, Outlet, useLocation } from '@tanstack/react-router';
+import { createRootRouteWithContext, Outlet, redirect, useLocation } from '@tanstack/react-router';
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
 import AnnouncementBar from 'components/builder-io/announcement-bar';
 import { Toaster } from 'components/redpanda-ui/components/sonner';
@@ -33,6 +33,7 @@ import { RouterSync } from '../components/misc/router-sync';
 import { SidebarInset } from '../components/redpanda-ui/components/sidebar';
 import RequireAuth from '../components/require-auth';
 import { useIsDarkMode } from '../hooks/use-is-dark-mode';
+import { api } from '../state/backend-api';
 import { IsDev } from '../utils/env';
 import { ModalContainer } from '../utils/modal-container';
 
@@ -42,7 +43,28 @@ export type RouterContext = {
   dataplaneTransport: Transport;
 };
 
+/** Matches the login page and everything below it (e.g. the OIDC callback route). */
+const LOGIN_PATH_REGEX = /^\/login(\/|$)/;
+const TRAILING_SLASH_REGEX = /\/+$/;
+
+export function isLoginPath(pathname: string): boolean {
+  return LOGIN_PATH_REGEX.test(pathname.replace(TRAILING_SLASH_REGEX, '') || '/');
+}
+
 export const Route = createRootRouteWithContext<RouterContext>()({
+  // Once any request came back 401 (`userData === null`) the login page is the
+  // only route allowed to render. Without this guard a protected page that was
+  // already mounting when the 401 arrived can navigate the router back onto
+  // itself — nuqs flushing a default search param (`/topics?showInternal=true`),
+  // a URL-sync effect, a pending loader — which triggers another 401, another
+  // redirect to /login, and an endless /topics <-> /login ping-pong.
+  // The guard lives on the root route so it covers every navigation source,
+  // not just the ones that go through appGlobal.historyPush.
+  beforeLoad: ({ location }) => {
+    if (api.userData === null && !isLoginPath(location.pathname)) {
+      throw redirect({ to: '/login', replace: true });
+    }
+  },
   component: RootLayout,
 });
 
@@ -64,7 +86,7 @@ function RootLayout() {
 
 function SelfHostedLayout() {
   const location = useLocation();
-  const isLoginPage = location.pathname.startsWith('/login');
+  const isLoginPage = isLoginPath(location.pathname);
 
   if (isLoginPage) {
     return <Outlet />;

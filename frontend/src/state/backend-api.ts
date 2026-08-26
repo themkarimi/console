@@ -228,18 +228,29 @@ async function handle401(res: Response) {
   // Logout
   //   Clear our 'User' data if we have any
   //   Any old/invalid JWT will be cleared by the server
+  const hadSession = api.userData != null;
   api.userData = null;
 
-  try {
-    const text = await res.text();
-    const obj = JSON.parse(text);
-    // biome-ignore lint/suspicious/noConsole: intentional console usage
-    console.log(`unauthorized message: ${text}`);
+  const text = await res.text().catch(() => '');
+  // biome-ignore lint/suspicious/noConsole: intentional console usage
+  console.log(`unauthorized message: ${text}`);
 
-    const err = obj as ApiError;
-    uiState.loginError = String(err.message);
-  } catch (err) {
-    uiState.loginError = String(err);
+  // The body is an ApiError for our own handlers, but a plain-text or HTML body
+  // for auth middlewares and reverse proxies - never let that throw here.
+  let message = text.trim();
+  try {
+    const err = JSON.parse(text) as ApiError;
+    if (err?.message) {
+      message = String(err.message);
+    }
+  } catch {
+    // not JSON - keep the raw body as the message
+  }
+
+  // Only surface a dialog when a session was actually lost or rejected.
+  // Never having been logged in is not an error: the login page speaks for itself.
+  if (hadSession) {
+    uiState.loginError = message || 'Your session has expired. Please log in again.';
   }
 
   // Save current location url
@@ -263,8 +274,9 @@ async function handle401(res: Response) {
     return;
   }
 
-  // Non-embedded mode: redirect to login
-  appGlobal.historyPush('/login');
+  // Non-embedded mode: redirect to login. Replace instead of push so the
+  // unauthenticated page does not pile up in the browser history.
+  appGlobal.historyReplace('/login');
 }
 
 function processVersionInfo(headers: Headers) {
@@ -618,7 +630,7 @@ const _apiCreator = (set: any, get: any) => ({
         // Authentication failure (401) - redirect to login
         if (err.code === Code.Unauthenticated) {
           set({ userData: null });
-          appGlobal.historyPush('/login');
+          appGlobal.historyReplace('/login');
           return;
         }
 
@@ -627,7 +639,7 @@ const _apiCreator = (set: any, get: any) => ({
           set({ userData: null });
           // TODO - solve typings, provide corresponding Reason type
           const subject = getOidcSubject(err);
-          appGlobal.historyPush(`/login?error_code=permission_denied&oidc_subject=${subject}`);
+          appGlobal.historyReplace(`/login?error_code=permission_denied&oidc_subject=${subject}`);
           return;
         }
 

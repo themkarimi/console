@@ -16,6 +16,7 @@ import { config as appConfig, isEmbedded } from '../../config';
 import { trackHubspotPage } from '../../hubspot/hubspot.helper';
 import { appGlobal } from '../../state/app-global';
 import { api } from '../../state/backend-api';
+import { uiState } from '../../state/ui-state';
 
 /**
  * RouterSync replaces the legacy HistorySetter component.
@@ -52,6 +53,10 @@ export const RouterSync = () => {
   // Sync location to appGlobal
   useEffect(() => {
     appGlobal.setLocation(location);
+    // Mirror it into the UI store as well: components that gate on the current
+    // path but live above the Outlet (RequireAuth) are not re-rendered by the
+    // router on navigation, so they need a store subscription to notice it.
+    uiState.pathName = location.pathname;
   }, [location]);
 
   // Notify shell (Cloud UI) when Console navigates internally.

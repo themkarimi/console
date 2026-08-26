@@ -16,16 +16,16 @@ import { config as appConfig } from '../config';
 import { appGlobal } from '../state/app-global';
 import { api, useApiStoreHook } from '../state/backend-api';
 import { useSupportedFeaturesStore } from '../state/supported-features';
-import { uiState } from '../state/ui-state';
+import { uiState, useUIStateStore } from '../state/ui-state';
 import { AppFeatures, getBasePath, IsDev } from '../utils/env';
 
-function loginHandling(): JSX.Element | null {
+function loginHandling(currentPath: string): JSX.Element | null {
   if (!AppFeatures.SINGLE_SIGN_ON) {
     return null;
   }
 
   const preLogin = <div style={{ background: 'rgb(233, 233, 233)', height: '100vh' }} />;
-  const path = window.location.pathname.removePrefix(getBasePath() ?? '');
+  const path = currentPath.removePrefix(getBasePath() ?? '');
   const devPrint = (str: string) => {
     if (IsDev) {
       // biome-ignore lint/suspicious/noConsole: dev logging
@@ -50,9 +50,9 @@ function loginHandling(): JSX.Element | null {
   if (api.userData === null && !path.startsWith('/login')) {
     devPrint('known not logged in, redirecting to login');
     // Use SPA navigation instead of a hard page reload. A hard reload here races
-    // with the historyPush already issued by handle401/refreshUserData, causing
+    // with the redirect already issued by handle401/refreshUserData, causing
     // the browser to reload the page repeatedly before landing on the login page.
-    appGlobal.historyPush('/login');
+    appGlobal.historyReplace('/login');
     return preLogin;
   }
 
@@ -94,8 +94,15 @@ const RequireAuth = ({ children }: { children: ReactNode }) => {
   // in refreshUserData's catch); without this, loginHandling never re-runs and the
   // preLogin placeholder is shown forever instead of ConnectionErrorUI.
   useApiStoreHook((s) => s.userDataError);
+  // The router's path, mirrored into the UI store by RouterSync. Two reasons not
+  // to read window.location here: RequireAuth sits above the Outlet, so the
+  // router never re-renders it on navigation, and the browser URL lags behind
+  // the router - right after redirecting itself to /login it still reads
+  // /topics, which used to leave the user on the blank pre-login placeholder
+  // forever. Falls back to the browser URL before the first sync.
+  const routerPath = useUIStateStore((s) => s.pathName);
 
-  const r = loginHandling(); // Complete login, or fetch user if needed
+  const r = loginHandling(routerPath || window.location.pathname); // Complete login, or fetch user if needed
   if (r) {
     return r;
   }

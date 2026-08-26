@@ -48,6 +48,7 @@ import {
   SASLMechanism,
 } from '../../protogen/redpanda/api/console/v1alpha1/authentication_pb';
 import { appGlobal } from '../../state/app-global';
+import { api } from '../../state/backend-api';
 import { useUIStateStore } from '../../state/ui-state';
 
 const authenticationApiClient = {
@@ -80,18 +81,16 @@ const authenticationApiClient = {
       throw new Error('security client is not initialized');
     }
 
-    const response = await client
-      .loginSaslScram({
-        username,
-        password,
-        mechanism,
-      } as LoginSaslScramRequest)
-      .then(() => {
-        appGlobal.historyPush('/overview');
-      });
+    await client.loginSaslScram({
+      username,
+      password,
+      mechanism,
+    } as LoginSaslScramRequest);
 
-    // biome-ignore lint/suspicious/noConsole: debug logging
-    console.log({ response });
+    // Pull the identity before navigating: while `api.userData` is still null
+    // the root route's auth guard sends every protected route back to /login.
+    await api.refreshUserData();
+    appGlobal.historyPush('/overview');
   },
 };
 

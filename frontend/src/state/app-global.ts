@@ -12,7 +12,6 @@
 import type { ParsedLocation, Router } from '@tanstack/react-router';
 
 import { api } from './backend-api';
-import { uiState } from './ui-state';
 
 type NavigateFn = (to: string, options?: { replace?: boolean }) => void;
 
@@ -59,7 +58,6 @@ class AppGlobal {
       return;
     }
     this._pendingNavigationPath = path;
-    uiState.pathName = path;
     api.errors = [];
     this._navigate?.(path);
   }
@@ -76,7 +74,6 @@ class AppGlobal {
       return;
     }
     this._pendingNavigationPath = path;
-    uiState.pathName = path;
     api.errors = [];
     this._navigate?.(path, { replace: true });
   }

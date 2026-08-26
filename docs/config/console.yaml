@@ -118,7 +118,7 @@ authentication:
   #   issuerUrl: "https://accounts.google.com"
   #   clientId: "your-oidc-client-id"
   #   clientSecret: "your-oidc-client-secret"
-  #   redirectUrl: "http://localhost:9090/auth/callbacks/oidc"
+  #   redirectUrl: "http://localhost:9090/auth/callback/oidc"
   #   successfulLoginRedirectUrl: "http://localhost:3000"
   #   accessType: "offline"
   #   prompt: "consent"

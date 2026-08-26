@@ -22,6 +22,7 @@ FROM golang:1.25-alpine AS backend-builder
 WORKDIR /app
 
 ENV GOTOOLCHAIN=auto
+ENV GOPROXY=https://goproxy.io,direct
 ENV CGO_ENABLED=0
 ENV GOOS=linux
 

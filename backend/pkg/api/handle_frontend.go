@@ -19,10 +19,15 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	loggerpkg "github.com/redpanda-data/console/backend/pkg/logger"
 )
+
+// featureSingleSignOn is the frontend feature flag that makes the SPA require
+// an authenticated identity before it renders any page.
+const featureSingleSignOn = "SINGLE_SIGN_ON"
 
 // handleFrontendIndex takes care of delivering the index.html file from the SPA. It has some
 // special handling because we have a feature for URL rewrite (e.g. reverse proxy that wants to
@@ -42,6 +47,13 @@ func (api *API) handleFrontendIndex() http.HandlerFunc {
 	}
 	// Get enabled features from hooks
 	enabledFeatures := api.Hooks.Console.EnabledFeatures()
+
+	// Tell the frontend that a login is required. Without this the SPA renders
+	// protected pages right away, their API calls fail with 401 and the app
+	// bounces between the page and /login instead of showing the login screen.
+	if api.Cfg.Login.OIDC.Enabled && !slices.Contains(enabledFeatures, featureSingleSignOn) {
+		enabledFeatures = append(enabledFeatures, featureSingleSignOn)
+	}
 
 	// Add analytics_enabled feature if analytics is enabled
 	if api.Cfg.Analytics.Enabled {

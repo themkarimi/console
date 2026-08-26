@@ -30,7 +30,7 @@ login:
     issuerUrl: "https://accounts.example.com"
     clientId: "console"
     # clientSecret: set via flag or environment variable (see below)
-    redirectUrl: "https://console.example.com/login/callbacks/oidc"
+    redirectUrl: "https://console.example.com/auth/callback/oidc"
     # cookieEncryptionSecret: set via flag or environment variable (see below)
     sessionCookieSecure: true  # recommended in production (requires HTTPS)
     roleBindings:
@@ -61,7 +61,7 @@ login:
 
     # Callback URL that the identity provider redirects to after login.
     # Must match the redirect URI configured in the identity provider.
-    redirectUrl: "https://console.example.com/login/callbacks/oidc"
+    redirectUrl: "https://console.example.com/auth/callback/oidc"
 
     # OAuth2/OIDC scopes to request. "openid" is always included.
     # Default: ["openid", "profile", "email"]
@@ -187,7 +187,7 @@ Permission levels follow a hierarchy: `read` < `write` < `admin`. A higher level
 ### Keycloak
 
 1. Create a new **confidential** OpenID Connect client in your Keycloak realm.
-2. Set the **Valid Redirect URIs** to `https://console.example.com/login/callbacks/oidc`.
+2. Set the **Valid Redirect URIs** to `https://console.example.com/auth/callback/oidc`.
 3. Enable the **groups** client scope or add a mapper that adds group memberships to the ID token as a claim named `groups`.
 4. Note the **Client ID** and **Client Secret** from the Credentials tab.
 
@@ -197,7 +197,7 @@ login:
     enabled: true
     issuerUrl: "https://keycloak.example.com/realms/myrealm"
     clientId: "console"
-    redirectUrl: "https://console.example.com/login/callbacks/oidc"
+    redirectUrl: "https://console.example.com/auth/callback/oidc"
     groupClaimKey: "groups"
     roleBindings:
       - roleName: admin
@@ -207,7 +207,7 @@ login:
 ### Okta
 
 1. Create a new **Web** OIDC application in Okta.
-2. Set the **Sign-in redirect URI** to `https://console.example.com/login/callbacks/oidc`.
+2. Set the **Sign-in redirect URI** to `https://console.example.com/auth/callback/oidc`.
 3. Add a **Groups claim** to the ID token in the application's Sign On policy or via an authorization server claim rule.
 4. Note the **Client ID**, **Client Secret**, and the **Okta domain**.
 
@@ -217,7 +217,7 @@ login:
     enabled: true
     issuerUrl: "https://dev-12345678.okta.com"
     clientId: "0oa..."
-    redirectUrl: "https://console.example.com/login/callbacks/oidc"
+    redirectUrl: "https://console.example.com/auth/callback/oidc"
     groupClaimKey: "groups"
     roleBindings:
       - roleName: admin
@@ -227,7 +227,7 @@ login:
 ### Google Workspace
 
 1. Create an **OAuth 2.0 Client ID** of type **Web application** in Google Cloud Console.
-2. Add `https://console.example.com/login/callbacks/oidc` as an **Authorized redirect URI**.
+2. Add `https://console.example.com/auth/callback/oidc` as an **Authorized redirect URI**.
 3. Google's standard ID token does not include group memberships. You can use the `email` claim as an identity and control access via `allowedGroups` populated with email addresses, or integrate with Google's Admin SDK to populate group claims via a custom OIDC proxy.
 
 ```yaml
@@ -236,7 +236,7 @@ login:
     enabled: true
     issuerUrl: "https://accounts.google.com"
     clientId: "your-client-id.apps.googleusercontent.com"
-    redirectUrl: "https://console.example.com/login/callbacks/oidc"
+    redirectUrl: "https://console.example.com/auth/callback/oidc"
     usernameClaim: "email"
     avatarClaimKey: "picture"
     # Google does not emit a "groups" claim by default.
