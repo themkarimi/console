@@ -9,8 +9,17 @@
  * by the Apache License, Version 2.0
  */
 
-import { createFileRoute, Navigate } from '@tanstack/react-router';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/')({
-  component: () => <Navigate replace to="/overview" />,
+  // Redirect from the route, not from a rendered `<Navigate>`. `<Navigate>` fires
+  // its navigation from a layout effect whose dependency is the props object, so a
+  // fresh `<Navigate replace to="/overview" />` element re-navigates on every
+  // commit. While the root auth guard keeps rejecting the pending navigation the
+  // component stays mounted, and that turns into an endless navigate/render loop
+  // that pins the main thread and never paints a page.
+  beforeLoad: () => {
+    throw redirect({ replace: true, to: '/overview' });
+  },
+  component: () => null,
 });

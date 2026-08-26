@@ -9,7 +9,7 @@
  * by the Apache License, Version 2.0
  */
 
-import type { JSX, ReactNode } from 'react';
+import { type JSX, type ReactNode, useEffect } from 'react';
 
 import { ConnectionErrorUI } from './misc/connection-error-ui';
 import { config as appConfig } from '../config';
@@ -48,11 +48,11 @@ function loginHandling(currentPath: string): JSX.Element | null {
   }
 
   if (api.userData === null && !path.startsWith('/login')) {
-    devPrint('known not logged in, redirecting to login');
-    // Use SPA navigation instead of a hard page reload. A hard reload here races
-    // with the redirect already issued by handle401/refreshUserData, causing
-    // the browser to reload the page repeatedly before landing on the login page.
-    appGlobal.historyReplace('/login');
+    devPrint('known not logged in, waiting for the login redirect');
+    // The navigation itself is issued from an effect in RequireAuth. Navigating
+    // from here would be a state update during render: TanStack Router's
+    // Transitioner re-renders, RequireAuth renders again, and it redirects again
+    // - an endless loop that pins the main thread and never paints a page.
     return preLogin;
   }
 
@@ -86,6 +86,19 @@ function loginHandling(currentPath: string): JSX.Element | null {
   return null;
 }
 
+/**
+ * True once the identity call has come back unauthenticated and the current path
+ * is not one that renders without a session. Kept separate from `loginHandling`
+ * so the redirect can be issued from an effect rather than during render.
+ */
+function needsLoginRedirect(path: string): boolean {
+  return (
+    AppFeatures.SINGLE_SIGN_ON &&
+    api.userData === null &&
+    !(path.startsWith('/login') || path.startsWith('/trial-expired') || path.startsWith('/upload-license'))
+  );
+}
+
 const RequireAuth = ({ children }: { children: ReactNode }) => {
   // Subscribe to the API store so this component re-renders when userData changes
   // (e.g. from undefined -> null when not authenticated, triggering the login redirect)
@@ -102,7 +115,16 @@ const RequireAuth = ({ children }: { children: ReactNode }) => {
   // forever. Falls back to the browser URL before the first sync.
   const routerPath = useUIStateStore((s) => s.pathName);
 
-  const r = loginHandling(routerPath || window.location.pathname); // Complete login, or fetch user if needed
+  const currentPath = routerPath || window.location.pathname;
+  const redirectToLogin = needsLoginRedirect(currentPath.removePrefix(getBasePath() ?? ''));
+  useEffect(() => {
+    if (redirectToLogin) {
+      // Replace, not push, so the unauthenticated page does not pile up in history.
+      appGlobal.historyReplace('/login');
+    }
+  }, [redirectToLogin]);
+
+  const r = loginHandling(currentPath); // Complete login, or fetch user if needed
   if (r) {
     return r;
   }
