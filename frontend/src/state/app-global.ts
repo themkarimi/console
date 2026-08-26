@@ -52,7 +52,10 @@ class AppGlobal {
     // re-renders that fire while navigation is pending (e.g. multiple concurrent
     // 401 responses all calling historyPush('/login')) each cancel the pending
     // navigation and restart it, producing an infinite reload loop.
-    if (this._pendingNavigationPath !== null && this.normalizePath(this._pendingNavigationPath) === this.normalizePath(path)) {
+    if (
+      this._pendingNavigationPath !== null &&
+      this.normalizePath(this._pendingNavigationPath) === this.normalizePath(path)
+    ) {
       return;
     }
     this._pendingNavigationPath = path;
@@ -66,7 +69,10 @@ class AppGlobal {
     if (this.normalizePath(this._location?.pathname) === this.normalizePath(path)) {
       return;
     }
-    if (this._pendingNavigationPath !== null && this.normalizePath(this._pendingNavigationPath) === this.normalizePath(path)) {
+    if (
+      this._pendingNavigationPath !== null &&
+      this.normalizePath(this._pendingNavigationPath) === this.normalizePath(path)
+    ) {
       return;
     }
     this._pendingNavigationPath = path;

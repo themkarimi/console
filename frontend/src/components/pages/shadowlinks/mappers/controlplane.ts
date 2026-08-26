@@ -19,13 +19,14 @@ import { timestampDate } from '@bufbuild/protobuf/wkt';
 import { FilterType, PatternType, ScramMechanism } from 'protogen/redpanda/core/admin/v2/shadow_link_pb';
 import { ACLOperation, ACLPattern, ACLPermissionType, ACLResource } from 'protogen/redpanda/core/common/v1/acl_pb';
 
+import { mapSchemaRegistrySyncOptions, mapSchemaRegistrySyncOptionsToFormValues } from './schema-registry';
 import { AUTH_METHOD, type FormValues, TLS_MODE } from '../create/model';
 import {
   mapControlplaneStateToUnified,
   type UnifiedAuthenticationConfiguration,
   type UnifiedClientOptions,
   type UnifiedConsumerOffsetSyncOptions,
-  type UnifiedSchemaRegistrySyncOptions,
+  type UnifiedRoleSyncOptions,
   type UnifiedSecuritySyncOptions,
   type UnifiedShadowLink,
   type UnifiedShadowLinkConfigurations,
@@ -143,6 +144,25 @@ function mapControlplaneConsumerOffsetSyncOptions(
 }
 
 /**
+ * Map controlplane role sync options to unified type
+ */
+function mapControlplaneRoleSyncOptions(
+  options: ControlplaneShadowLink['roleSyncOptions']
+): UnifiedRoleSyncOptions | undefined {
+  if (!options) {
+    return;
+  }
+
+  return {
+    roleNameFilters: (options.roleNameFilters ?? []).map((f) => ({
+      name: f.name,
+      patternType: f.patternType,
+      filterType: f.filterType,
+    })),
+  };
+}
+
+/**
  * Map controlplane security sync options to unified type
  */
 function mapControlplaneSecuritySyncOptions(
@@ -174,24 +194,6 @@ function mapControlplaneSecuritySyncOptions(
 }
 
 /**
- * Map controlplane schema registry sync options to unified type
- */
-function mapControlplaneSchemaRegistrySyncOptions(
-  options: ControlplaneShadowLink['schemaRegistrySyncOptions']
-): UnifiedSchemaRegistrySyncOptions | undefined {
-  if (!options) {
-    return;
-  }
-
-  return {
-    schemaRegistryShadowingMode:
-      options.schemaRegistryShadowingMode?.case === 'shadowSchemaRegistryTopic'
-        ? { case: 'shadowSchemaRegistryTopic', value: {} }
-        : { case: undefined },
-  };
-}
-
-/**
  * Map controlplane configurations to unified configurations
  */
 function mapControlplaneConfigurations(sl: ControlplaneShadowLink): UnifiedShadowLinkConfigurations | undefined {
@@ -203,8 +205,9 @@ function mapControlplaneConfigurations(sl: ControlplaneShadowLink): UnifiedShado
     clientOptions: mapControlplaneClientOptions(sl.clientOptions),
     topicMetadataSyncOptions: mapControlplaneTopicMetadataSyncOptions(sl.topicMetadataSyncOptions),
     consumerOffsetSyncOptions: mapControlplaneConsumerOffsetSyncOptions(sl.consumerOffsetSyncOptions),
+    roleSyncOptions: mapControlplaneRoleSyncOptions(sl.roleSyncOptions),
     securitySyncOptions: mapControlplaneSecuritySyncOptions(sl.securitySyncOptions),
-    schemaRegistrySyncOptions: mapControlplaneSchemaRegistrySyncOptions(sl.schemaRegistrySyncOptions),
+    schemaRegistrySyncOptions: mapSchemaRegistrySyncOptions(sl.schemaRegistrySyncOptions),
   };
 }
 
@@ -218,7 +221,6 @@ export function fromControlplaneShadowLink(sl: ControlplaneShadowLink): UnifiedS
     name: sl.name,
     id: sl.id,
     state: mapControlplaneStateToUnified(sl.state),
-    resourceGroupId: sl.resourceGroupId,
     shadowRedpandaId: sl.shadowRedpandaId,
     createdAt: sl.createdAt ? timestampDate(sl.createdAt) : undefined,
     updatedAt: sl.updatedAt ? timestampDate(sl.updatedAt) : undefined,
@@ -416,6 +418,29 @@ const buildControlplaneConsumerGroupsValues = (
 };
 
 /**
+ * Build roles form values from controlplane shadow link.
+ * Unset options and an empty filter list both hydrate as specify mode with no
+ * filters (role sync disabled), matching the dataplane hydration so an
+ * untouched edit form never emits a role_sync_options mask.
+ */
+const buildControlplaneRolesValues = (shadowLink: ControlplaneShadowLink): Pick<FormValues, 'rolesMode' | 'roles'> => {
+  const roleNameFilters = shadowLink.roleSyncOptions?.roleNameFilters ?? [];
+
+  const isAllMode = isAllNameFilter(roleNameFilters);
+
+  return {
+    rolesMode: isAllMode ? 'all' : 'specify',
+    roles: isAllMode
+      ? []
+      : roleNameFilters.map((filter) => ({
+          name: filter.name,
+          patternType: filter.patternType,
+          filterType: filter.filterType,
+        })),
+  };
+};
+
+/**
  * Build ACLs form values from controlplane shadow link
  */
 const buildControlplaneACLsValues = (
@@ -447,14 +472,8 @@ const buildControlplaneACLsValues = (
  */
 const buildControlplaneSchemaRegistryValues = (
   shadowLink: ControlplaneShadowLink
-): Pick<FormValues, 'enableSchemaRegistrySync'> => {
-  const schemaRegistrySyncOptions = shadowLink.schemaRegistrySyncOptions;
-  const isEnabled = schemaRegistrySyncOptions?.schemaRegistryShadowingMode?.case === 'shadowSchemaRegistryTopic';
-
-  return {
-    enableSchemaRegistrySync: isEnabled,
-  };
-};
+): Pick<FormValues, 'enableSchemaRegistrySync' | 'schemaRegistry'> =>
+  mapSchemaRegistrySyncOptionsToFormValues(shadowLink.schemaRegistrySyncOptions);
 
 /**
  * Build form values from controlplane shadow link data
@@ -465,11 +484,13 @@ export const buildDefaultFormValuesFromControlplane = (shadowLink: ControlplaneS
   const authSettings = extractControlplaneAuthSettings(shadowLink.clientOptions);
   const topicsValues = buildControlplaneTopicsValues(shadowLink);
   const consumerGroupsValues = buildControlplaneConsumerGroupsValues(shadowLink);
+  const rolesValues = buildControlplaneRolesValues(shadowLink);
   const aclsValues = buildControlplaneACLsValues(shadowLink);
   const schemaRegistryValues = buildControlplaneSchemaRegistryValues(shadowLink);
 
   return {
     name: shadowLink.name ?? '',
+    ...rolesValues,
     ...connectionValues,
     ...authSettings,
     ...topicsValues,

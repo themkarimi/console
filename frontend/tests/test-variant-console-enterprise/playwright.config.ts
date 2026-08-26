@@ -1,6 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 import dotenv from 'dotenv';
 
+import type { CustomTestOptions } from './fixtures';
+
 dotenv.config();
 
 // Configure reporters based on environment
@@ -8,10 +10,24 @@ const reporters = process.env.CI
   ? [['github' as const], ['html' as const, { outputFolder: 'playwright-report' }]]
   : [['list' as const], ['html' as const, { outputFolder: 'playwright-report' }]];
 
+// Resolve the shadow (destination) backend host port. Local runs remap every
+// port dynamically via E2E_PORTS_OVERRIDE (set by run-variant.mjs), so the dest
+// backend is NOT on the static 3101 — read its actual port from the override.
+// CI keeps the static variant.json ports (no override), so 3101 is correct there.
+const portsOverride: Record<string, number> | null = (() => {
+  try {
+    return process.env.E2E_PORTS_OVERRIDE ? JSON.parse(process.env.E2E_PORTS_OVERRIDE) : null;
+  } catch {
+    return null;
+  }
+})();
+const shadowBackendPort = portsOverride?.backendDest ?? 3101;
+const shadowBackendURL = process.env.REACT_APP_SHADOW_ORIGIN ?? `http://localhost:${shadowBackendPort}`;
+
 /**
  * Playwright Test configuration for Enterprise (console-enterprise) variant
  */
-const config = defineConfig({
+const config = defineConfig<CustomTestOptions>({
   // Extended timeout for shadowlink tests
   timeout: 120 * 1000,
 
@@ -30,6 +46,7 @@ const config = defineConfig({
 
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
+  retryStrategy: process.env.CI ? 'isolated' : 'immediate',
 
   /* Reduced workers for enterprise/shadowlink setup */
   workers: process.env.CI ? 4 : undefined,
@@ -37,9 +54,8 @@ const config = defineConfig({
   /* Reporter to use */
   reporter: reporters,
 
-  /* Global setup and teardown */
+  /* Global setup returns its teardown so live Testcontainers handles are reused. */
   globalSetup: '../shared/global-setup.mjs',
-  globalTeardown: '../shared/global-teardown.mjs',
 
   /* Custom metadata for setup/teardown */
   metadata: {
@@ -67,9 +83,9 @@ const config = defineConfig({
     screenshot: 'off',
     video: 'off',
 
-    /* Shadowlink destination backend URL (port 3101) */
-    shadowBackendURL: 'http://localhost:3101',
-  } as any,
+    /* Shadowlink destination backend URL (dynamic port locally, 3101 in CI) */
+    shadowBackendURL,
+  },
 
   /* Configure projects */
   projects: [

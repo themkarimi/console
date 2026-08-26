@@ -30,7 +30,7 @@ import {
 import { Separator } from 'components/redpanda-ui/components/separator';
 import { Spinner } from 'components/redpanda-ui/components/spinner';
 import { ToggleGroup, ToggleGroupItem } from 'components/redpanda-ui/components/toggle-group';
-import { Heading, InlineCode } from 'components/redpanda-ui/components/typography';
+import { InlineCode } from 'components/redpanda-ui/components/typography';
 import { extractSecretReferences, getUniqueSecretNames } from 'components/ui/secret/secret-detection';
 import type { editor } from 'monaco-editor';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -195,12 +195,9 @@ function CommandGroupHeading({ children, separator }: { children: React.ReactNod
   return (
     <>
       {separator ? <Separator /> : null}
-      <Heading
-        className="pt-3 pb-3 pl-2 font-semibold text-muted-foreground text-xs uppercase tracking-caption-wide"
-        level={5}
-      >
+      <h5 className="pt-3 pb-3 pl-2 font-semibold text-muted-foreground text-xs uppercase tracking-caption-wide">
         {children}
-      </Heading>
+      </h5>
     </>
   );
 }
@@ -242,13 +239,12 @@ function CommandMenuContent({
         <div className="!border-input border-b bg-dark-alpha-subtle px-2 py-1.5">
           <ToggleGroup
             attached={false}
-            onValueChange={(v: string) => {
+            onValueChange={([v]) => {
               if (v) {
                 onFilterChange(v as FilterValue);
               }
             }}
-            type="single"
-            value={activeFilter}
+            value={[activeFilter]}
           >
             <ToggleGroupItem value="all">All</ToggleGroupItem>
             <ToggleGroupItem value="variables">Variables</ToggleGroupItem>

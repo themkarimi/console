@@ -40,13 +40,13 @@ import {
   ListLayout,
   ListLayoutContent,
   ListLayoutFilters,
-  ListLayoutPagination,
   ListLayoutSearchInput,
 } from 'components/redpanda-ui/components/list-layout';
 import { KeyRoundIcon, ShieldIcon, Trash2Icon, UsersIcon } from 'lucide-react';
 import { parseAsArrayOf, parseAsString, useQueryStates } from 'nuqs';
 import type { FC } from 'react';
 import { useLayoutEffect, useState } from 'react';
+import { docsLinks } from 'utils/docs-links';
 import { pluralize } from 'utils/string';
 
 import { SASLMechanism } from '../../../../protogen/redpanda/api/dataplane/v1/user_pb';
@@ -75,7 +75,6 @@ import { Skeleton } from '../../../redpanda-ui/components/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../redpanda-ui/components/table';
 import { TagsValue } from '../../../redpanda-ui/components/tags';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../redpanda-ui/components/tooltip';
-import { Text } from '../../../redpanda-ui/components/typography';
 import { type FlatAclEntry, type RoleAclGroup, useUserPermissions } from '../hooks/use-principal-permissions';
 import { DeleteUserConfirmModal } from '../shared/delete-user-confirm-modal';
 import { SecurityTabsNav } from '../shared/security-tabs-nav';
@@ -315,23 +314,24 @@ export const UsersTabNew: FC = () => {
                 <div className="flex items-center gap-3">
                   <TooltipProvider>
                     <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button disabled={Boolean(createTooltip)} onClick={openCreateDialog}>
-                          Create user
-                        </Button>
-                      </TooltipTrigger>
+                      <TooltipTrigger
+                        render={
+                          <Button disabled={Boolean(createTooltip)} onClick={openCreateDialog}>
+                            Create user
+                          </Button>
+                        }
+                      />
                       {createTooltip && <TooltipContent>{createTooltip}</TooltipContent>}
                     </Tooltip>
                   </TooltipProvider>
-                  <Button asChild variant="link">
-                    <a
-                      href="https://docs.redpanda.com/current/manage/kubernetes/security/authentication/k-authentication/#scram"
-                      rel="noopener noreferrer"
-                      target="_blank"
-                    >
-                      Read the docs →
-                    </a>
-                  </Button>
+                  <Button
+                    render={
+                      <a href={docsLinks.selfManaged.scramAuthentication} rel="noopener noreferrer" target="_blank">
+                        Read the docs →
+                      </a>
+                    }
+                    variant="link"
+                  />
                 </div>
               </EmptyContent>
             )}
@@ -345,23 +345,29 @@ export const UsersTabNew: FC = () => {
     <>
       <SecurityTabsNav />
       <CreateUserDialog key={createDialogKey} onOpenChange={setIsCreateDialogOpen} open={isCreateDialogOpen} />
-      <ListLayout className="my-4">
-        <Text className="text-muted-foreground text-sm sm:text-base">
+      <ListLayout className="my-4 min-h-0">
+        <div className="text-muted-foreground text-sm sm:text-base">
           <DescriptionWithHelp short="SASL-SCRAM user accounts managed by your cluster." title="Users">
             These users are SASL-SCRAM users managed by your cluster. View permissions for other authentication
             identities (for example, OIDC, mTLS) on the Permissions List page.
           </DescriptionWithHelp>
-        </Text>
+        </div>
 
         <ListLayoutFilters
           actions={
             <TooltipProvider>
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button data-testid="create-user-button" disabled={Boolean(createTooltip)} onClick={openCreateDialog}>
-                    Create user
-                  </Button>
-                </TooltipTrigger>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      data-testid="create-user-button"
+                      disabled={Boolean(createTooltip)}
+                      onClick={openCreateDialog}
+                    >
+                      Create user
+                    </Button>
+                  }
+                />
                 {createTooltip && <TooltipContent>{createTooltip}</TooltipContent>}
               </Tooltip>
             </TooltipProvider>
@@ -392,9 +398,7 @@ export const UsersTabNew: FC = () => {
           </Table>
         </ListLayoutContent>
 
-        <ListLayoutPagination>
-          <DataTablePagination table={table} />
-        </ListLayoutPagination>
+        <DataTablePagination table={table} />
       </ListLayout>
     </>
   );
@@ -445,7 +449,7 @@ const AclPermissionRow = ({ acl }: { acl: FlatAclEntry }) => (
     </TableCell>
     <TableCell className="font-mono">{acl.resourceName}</TableCell>
     <TableCell>{acl.operation}</TableCell>
-    <TableCell className={acl.permissionType === 'Allow' ? 'text-green-600' : 'text-red-600'}>
+    <TableCell className={acl.permissionType === 'Allow' ? 'text-success' : 'text-error'}>
       {acl.permissionType}
     </TableCell>
     <TableCell className="text-muted-foreground">{acl.host}</TableCell>
@@ -470,7 +474,7 @@ const UserAclsCell = ({ userName }: { userName: string }) => {
       >
         <span className="leading-tight">{`${directAcls.length} ${pluralize(directAcls.length, 'ACL')}`}</span>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[620px]" transition={{ duration: 0 }}>
+      <PopoverContent align="start" className="w-[620px]">
         <Table size="sm" variant="simple">
           <TableHeader>
             <TableRow>
@@ -553,13 +557,14 @@ const UserActions = ({ user }: { user: PrincipalEntry }) => {
         open={isDeleteModalOpen}
         userName={user.name}
       />
-
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button className="deleteButton" size="icon-sm" variant="ghost">
-            <MoreHorizontalIcon className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
+        <DropdownMenuTrigger
+          render={
+            <Button className="deleteButton" size="icon-sm" variant="ghost">
+              <MoreHorizontalIcon className="h-4 w-4" />
+            </Button>
+          }
+        />
         <DropdownMenuContent>
           <DropdownMenuItem
             onClick={(e) => {

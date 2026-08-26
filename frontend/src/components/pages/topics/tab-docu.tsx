@@ -9,12 +9,13 @@
  * by the Apache License, Version 2.0
  */
 
-import { Component } from 'react';
+import { Component, type JSX } from 'react';
+import { docsLinks } from 'utils/docs-links';
 
 import type { Topic } from '../../../state/rest-interfaces';
 import '../../../utils/array-extensions';
 import { Button, Empty, VStack } from '@redpanda-data/ui';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import ReactMarkdown, { defaultUrlTransform as baseUriTransformer } from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -161,7 +162,7 @@ function renderDocuError(title: string, body: JSX.Element) {
       <VStack gap={4}>
         <Empty description={title} />
         {body}
-        <a href="https://docs.redpanda.com/docs/manage/console/" rel="noopener noreferrer" target="_blank">
+        <a href={docsLinks.selfManaged.console} rel="noopener noreferrer" target="_blank">
           <Button variant="solid">Redpanda Console Documentation</Button>
         </a>
       </VStack>

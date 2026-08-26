@@ -18,7 +18,7 @@ import { openDeleteModal } from './modals';
 import EmptyConnectors from '../../../assets/redpanda/EmptyConnectors.svg';
 import { type Pipeline, Pipeline_State } from '../../../protogen/redpanda/api/dataplane/v1/pipeline_pb';
 import { appGlobal } from '../../../state/app-global';
-import { api, pipelinesApi } from '../../../state/backend-api';
+import { pipelinesApi } from '../../../state/backend-api';
 import { Features } from '../../../state/supported-features';
 import { uiSettings } from '../../../state/ui';
 import { DefaultSkeleton } from '../../../utils/tsx-utils';
@@ -31,16 +31,13 @@ const { ToastContainer, toast } = createStandaloneToast();
 /**
  * Navigates to /rp-connect/create (legacy flow)
  */
-const LegacyCreatePipelineButton = () => {
-  const cannotCreate = api.userData?.canCreateTransforms === false;
-  return (
-    <div>
-      <NewButton as={cannotCreate ? undefined : Link} disabled={cannotCreate} to={cannotCreate ? undefined : '/rp-connect/create'}>
-        Create pipeline
-      </NewButton>
-    </div>
-  );
-};
+const LegacyCreatePipelineButton = () => (
+  <div>
+    <NewButton as={Link} to="/rp-connect/create">
+      Create pipeline
+    </NewButton>
+  </div>
+);
 
 /**
  * Shows image, text, and create button
@@ -279,7 +276,6 @@ class RpConnectPipelinesList extends PageComponent<{}> {
                           });
                       });
                     }}
-                    isDisabled={api.userData?.canDeleteTransforms === false}
                     variant="icon"
                   >
                     <TrashIcon />

@@ -36,7 +36,7 @@ import { SecretService } from 'protogen/redpanda/api/console/v1alpha1/secret_pb'
 import { SecurityService } from 'protogen/redpanda/api/console/v1alpha1/security_pb';
 import { TransformService } from 'protogen/redpanda/api/console/v1alpha1/transform_pb';
 import { UserService } from 'protogen/redpanda/api/dataplane/v1/user_pb';
-import { KnowledgeBaseService } from 'protogen/redpanda/api/dataplane/v1alpha3/knowledge_base_pb';
+import type { JSX } from 'react';
 
 import { DEFAULT_API_BASE, FEATURE_FLAGS } from './components/constants';
 import { appGlobal } from './state/app-global';
@@ -82,6 +82,30 @@ export const addBearerTokenInterceptor: ConnectRpcInterceptor = (next) => async 
 };
 
 /**
+ * Wraps a base `fetch` so REST requests carry the same Bearer token as gRPC
+ * (see {@link addBearerTokenInterceptor}).
+ *
+ * Under Module Federation v2 the Cloud UI host supplies the access token via
+ * `getAccessToken`/`config.jwt` rather than a pre-authenticated `fetch`, so
+ * Console must attach the header itself on every `config.fetch` call. Centralizing
+ * it here covers the REST helpers that call `config.fetch` directly instead of the
+ * `rest<T>()` wrapper, which already injects the token.
+ *
+ * The token is read lazily at call time because the host may refresh `config.jwt`
+ * in place. We never overwrite an `Authorization` header that a legacy
+ * host-provided (V1) authenticatedFetch may already have set.
+ */
+export const createAuthInjectingFetch =
+  (baseFetch: WindowOrWorkerGlobalScope['fetch']): WindowOrWorkerGlobalScope['fetch'] =>
+  (input, init) => {
+    const headers = new Headers(init?.headers);
+    if (config.jwt && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${config.jwt}`);
+    }
+    return baseFetch(input, { ...init, headers });
+  };
+
+/**
  * Interceptor to handle license expiration errors in gRPC responses.
  *
  * This interceptor checks if the error is of type `ConnectError` with the
@@ -118,7 +142,6 @@ export type SetConfigArguments = {
   fetch?: WindowOrWorkerGlobalScope['fetch'];
   jwt?: string;
   clusterId?: string;
-  aigwUrl?: string;
   urlOverride?: {
     rest?: string;
     ws?: string;
@@ -128,7 +151,6 @@ export type SetConfigArguments = {
   setSidebarItems?: (items: SidebarItem[]) => void;
   setBreadcrumbs?: (items: Breadcrumb[]) => void;
   isServerless?: boolean;
-  isAdpEnabled?: boolean;
   featureFlags?: Record<keyof typeof FEATURE_FLAGS, boolean>;
 };
 
@@ -137,7 +159,7 @@ export type SidebarItem = {
   to: string; // '/topics'
   icon?: JSX.Element;
   order: number;
-  group?: string; // "Agentic AI" - for grouping related items
+  group?: string;
 };
 
 export type Breadcrumb = {
@@ -147,7 +169,6 @@ export type Breadcrumb = {
 
 type Config = {
   controlplaneUrl: string;
-  aigwUrl?: string;
   dataplaneTransport?: Transport;
   restBasePath: string;
   grpcBasePath: string;
@@ -160,7 +181,6 @@ type Config = {
   rpcnSecretsClient?: Client<typeof SecretService>;
   transformsClient?: Client<typeof TransformService>;
   clusterStatusClient?: Client<typeof ClusterStatusService>;
-  knowledgebaseClient?: Client<typeof KnowledgeBaseService>;
   userClient?: Client<typeof UserService>;
   serviceAccountClient?: Client<typeof ServiceAccountService>;
   roleBindingClient?: Client<typeof RoleBindingService>;
@@ -172,7 +192,6 @@ type Config = {
   setSidebarItems: (items: SidebarItem[]) => void;
   setBreadcrumbs: (items: Breadcrumb[]) => void;
   isServerless: boolean;
-  isAdpEnabled: boolean;
   featureFlags: Record<keyof typeof FEATURE_FLAGS, boolean>;
 };
 
@@ -191,7 +210,6 @@ export const config: Config = {
     // no op - set by parent application
   },
   isServerless: false,
-  isAdpEnabled: false,
   featureFlags: { ...FEATURE_FLAGS, ...(window.__E2E_FEATURE_FLAGS__ ?? {}) },
 };
 
@@ -200,7 +218,6 @@ const setConfig = ({
   urlOverride,
   jwt,
   isServerless: isServerlessMode,
-  isAdpEnabled: isAdpEnabledMode,
   featureFlags,
   ...args
 }: SetConfigArguments) => {
@@ -234,7 +251,6 @@ const setConfig = ({
   const authenticationGrpcClient = createClient(AuthenticationService, dataplaneTransport);
   const transformClient = createClient(TransformService, dataplaneTransport);
   const clusterStatusGrpcClient = createClient(ClusterStatusService, dataplaneTransport);
-  const knowledgebaseGrpcClient = createClient(KnowledgeBaseService, dataplaneTransport);
   const userGrpcClient = createClient(UserService, dataplaneTransport);
 
   /* CONTROLPLANE CLIENTS */
@@ -246,11 +262,10 @@ const setConfig = ({
     jwt,
     dataplaneTransport,
     isServerless: isServerlessMode,
-    isAdpEnabled: isAdpEnabledMode ?? false,
     restBasePath: getRestBasePath(urlOverride?.rest),
     grpcBasePath: getGrpcBasePath(urlOverride?.grpc),
     controlplaneUrl: config.controlplaneUrl,
-    fetch: fetch ?? window.fetch.bind(window),
+    fetch: createAuthInjectingFetch(fetch ?? window.fetch.bind(window)),
     assetsPath: assetsUrl ?? getBasePath(),
     authenticationClient: authenticationGrpcClient,
     licenseClient: licenseGrpcClient,
@@ -261,7 +276,6 @@ const setConfig = ({
     transformsClient: transformClient,
     rpcnSecretsClient: secretGrpcClient,
     clusterStatusClient: clusterStatusGrpcClient,
-    knowledgebaseClient: knowledgebaseGrpcClient,
     userClient: userGrpcClient,
     serviceAccountClient,
     roleBindingClient,
@@ -396,10 +410,6 @@ export function isFeatureFlagEnabled(featureFlag: FeatureFlagKey) {
 
 export function isServerless() {
   return config.isServerless;
-}
-
-export function isAdpEnabled() {
-  return config.isAdpEnabled && !isServerless();
 }
 
 export const embeddedAvailableRoutesObservable = {

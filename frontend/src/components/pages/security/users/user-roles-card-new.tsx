@@ -22,6 +22,7 @@ import {
 } from 'components/redpanda-ui/components/empty';
 import { ExternalLinkIcon, Trash2Icon } from 'lucide-react';
 import { useState } from 'react';
+import { docsLinks } from 'utils/docs-links';
 
 import { UpdateRoleMembershipRequestSchema } from '../../../../protogen/redpanda/api/dataplane/v1/security_pb';
 import { useListRolesQuery, useUpdateRoleMembershipMutation } from '../../../../react-query/api/security';
@@ -40,7 +41,6 @@ import {
 import { ListLayout, ListLayoutContent, ListLayoutFilters } from '../../../redpanda-ui/components/list-layout';
 import { Skeleton } from '../../../redpanda-ui/components/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../redpanda-ui/components/table';
-import { Heading } from '../../../redpanda-ui/components/typography';
 
 type Role = {
   principalType: string;
@@ -105,15 +105,14 @@ export const UserRolesCardNew = ({ roles, userName, isLoading }: UserRolesCardNe
                 <EmptyDescription>Assign a role to grant this user permissions on cluster resources.</EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
-                <Button asChild variant="link">
-                  <a
-                    href="https://docs.redpanda.com/current/manage/security/authorization/rbac/"
-                    rel="noopener noreferrer"
-                    target="_blank"
-                  >
-                    Read the docs →
-                  </a>
-                </Button>
+                <Button
+                  render={
+                    <a href={docsLinks.selfManaged.rbac} rel="noopener noreferrer" target="_blank">
+                      Read the docs →
+                    </a>
+                  }
+                  variant="link"
+                />
               </EmptyContent>
             </Empty>
           </TableCell>
@@ -135,15 +134,20 @@ export const UserRolesCardNew = ({ roles, userName, isLoading }: UserRolesCardNe
                 <Trash2Icon className="h-4 w-4 text-muted-foreground" />
               </Button>
             )}
-            <Button asChild size="icon-sm" testId={`view-role-${r.principalName}`} variant="ghost">
-              <Link
-                params={{ roleName: r.principalName }}
-                search={{ host: undefined }}
-                to="/security/roles/$roleName/details"
-              >
-                <ExternalLinkIcon className="h-4 w-4 text-muted-foreground" />
-              </Link>
-            </Button>
+            <Button
+              render={
+                <Link
+                  params={{ roleName: r.principalName }}
+                  search={{ host: undefined }}
+                  to="/security/roles/$roleName/details"
+                >
+                  <ExternalLinkIcon className="h-4 w-4 text-muted-foreground" />
+                </Link>
+              }
+              size="icon-sm"
+              testId={`view-role-${r.principalName}`}
+              variant="ghost"
+            />
           </div>
         </TableCell>
       </TableRow>
@@ -168,9 +172,7 @@ export const UserRolesCardNew = ({ roles, userName, isLoading }: UserRolesCardNe
             ) : undefined
           }
         >
-          <Heading as="h2" level={4}>
-            Roles
-          </Heading>
+          <h2 className="text-heading-sm">Roles</h2>
         </ListLayoutFilters>
         <ListLayoutContent>
           <Table>

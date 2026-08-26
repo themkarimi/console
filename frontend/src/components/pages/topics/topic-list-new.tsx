@@ -33,12 +33,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from 'components/redpanda-ui/components/empty';
-import {
-  ListLayout,
-  ListLayoutFilters,
-  ListLayoutPagination,
-  ListLayoutSearchInput,
-} from 'components/redpanda-ui/components/list-layout';
+import { ListLayout, ListLayoutFilters, ListLayoutSearchInput } from 'components/redpanda-ui/components/list-layout';
 import { AlertCircle, AlertTriangle, DatabaseIcon, EyeOff, Search, X } from 'lucide-react';
 import { parseAsBoolean, parseAsInteger, parseAsString, useQueryState } from 'nuqs';
 import type { FC } from 'react';
@@ -68,7 +63,6 @@ import {
 import { Skeleton } from '../../redpanda-ui/components/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../redpanda-ui/components/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../redpanda-ui/components/tooltip';
-import { Text } from '../../redpanda-ui/components/typography';
 import { DeleteResourceAlertDialog } from '../../ui/delete-resource-alert-dialog';
 
 const nameFilterFn = (row: Row<Topic>, columnId: string, filterValue: string) => {
@@ -119,7 +113,7 @@ const TopicList: FC = () => {
     api
       .deleteTopic(topicName)
       .then(() => {
-        toast.success('Topic Deleted', {
+        toast.success('Topic deleted', {
           description: `Topic "${topicName}" has been deleted.`,
         });
         setTopicToDelete(null);
@@ -268,16 +262,18 @@ const TopicList: FC = () => {
       meta: { align: 'right' as const, headWidth: 'fit' as const },
       cell: ({ row: { original: topic } }) => (
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              className="deleteButton"
-              data-testid={`topic-actions-trigger-${topic.topicName}`}
-              size="icon-sm"
-              variant="ghost"
-            >
-              <MoreHorizontalIcon className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                className="deleteButton"
+                data-testid={`topic-actions-trigger-${topic.topicName}`}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <MoreHorizontalIcon className="h-4 w-4" />
+              </Button>
+            }
+          />
           <DropdownMenuContent>
             <DropdownMenuItem
               data-testid={`delete-topic-button-${topic.topicName}`}
@@ -402,7 +398,7 @@ const TopicList: FC = () => {
         ) : null}
       </DeleteResourceAlertDialog>
 
-      <ListLayout className="my-4" data-testid="topics-table">
+      <ListLayout className="my-4 min-h-0" data-testid="topics-table">
         <div className="flex flex-wrap gap-8">
           {(
             [
@@ -412,8 +408,8 @@ const TopicList: FC = () => {
             ] as const
           ).map(({ label, value }) => (
             <div className="flex flex-col gap-0.5" key={label}>
-              <Text className="font-semibold text-2xl tabular-nums">{value}</Text>
-              <Text className="text-muted-foreground text-sm">{label}</Text>
+              <div className="font-semibold text-2xl tabular-nums">{value}</div>
+              <div className="text-body text-muted-foreground">{label}</div>
             </div>
           ))}
         </div>
@@ -484,9 +480,7 @@ const TopicList: FC = () => {
           <TableBody>{renderBody()}</TableBody>
         </Table>
 
-        <ListLayoutPagination>
-          <DataTablePagination table={table} />
-        </ListLayoutPagination>
+        <DataTablePagination table={table} />
       </ListLayout>
     </>
   );
@@ -508,11 +502,13 @@ const TopicHealthIcons = ({ topic }: { topic: Topic }) => {
     <TooltipProvider>
       {!!leaderlessPartitions && (
         <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex text-destructive">
-              <AlertCircle aria-hidden="true" className="h-4 w-4" />
-            </span>
-          </TooltipTrigger>
+          <TooltipTrigger
+            render={
+              <span className="inline-flex text-destructive">
+                <AlertCircle aria-hidden="true" className="h-4 w-4" />
+              </span>
+            }
+          />
           <TooltipContent>
             {`This topic has ${leaderlessPartitions.length} ${leaderlessPartitions.length === 1 ? 'a leaderless partition' : 'leaderless partitions'}`}
           </TooltipContent>
@@ -520,11 +516,13 @@ const TopicHealthIcons = ({ topic }: { topic: Topic }) => {
       )}
       {!!underReplicatedPartitions && (
         <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex text-warning">
-              <AlertTriangle aria-hidden="true" className="h-4 w-4" />
-            </span>
-          </TooltipTrigger>
+          <TooltipTrigger
+            render={
+              <span className="inline-flex text-warning">
+                <AlertTriangle aria-hidden="true" className="h-4 w-4" />
+              </span>
+            }
+          />
           <TooltipContent>
             {`This topic has ${underReplicatedPartitions.length} ${underReplicatedPartitions.length === 1 ? 'an under-replicated partition' : 'under-replicated partitions'}`}
           </TooltipContent>
@@ -534,8 +532,8 @@ const TopicHealthIcons = ({ topic }: { topic: Topic }) => {
   );
 };
 
-const iconAllowed = <span className="text-green-600">✓</span>;
-const iconForbidden = <span className="text-red-600">✗</span>;
+const iconAllowed = <span className="text-success">✓</span>;
+const iconForbidden = <span className="text-error">✗</span>;
 const iconClosedEye = (
   <span className="ml-1 inline-block opacity-50">
     <EyeOff aria-hidden="true" className="inline h-3.5 w-3.5" />
@@ -579,12 +577,14 @@ const TopicName = ({ topic }: { topic: Topic }) => {
   return (
     <TooltipProvider>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="whitespace-break-spaces break-words">
-            {topic.topicName}
-            {iconClosedEye}
-          </span>
-        </TooltipTrigger>
+        <TooltipTrigger
+          render={
+            <span className="whitespace-break-spaces break-words">
+              {topic.topicName}
+              {iconClosedEye}
+            </span>
+          }
+        />
         <TooltipContent side="right">{popoverContent}</TooltipContent>
       </Tooltip>
     </TooltipProvider>

@@ -9,20 +9,17 @@
  * by the Apache License, Version 2.0
  */
 
-import { Avatar, Button, ColorModeSwitch, CopyButton, Popover, PopoverBody, PopoverContent, PopoverHeader, PopoverTrigger, Text } from '@redpanda-data/ui';
-import { Link, useLocation, useMatchRoute } from '@tanstack/react-router';
-import { Heading } from 'components/redpanda-ui/components/typography';
+import { ColorModeSwitch } from '@redpanda-data/ui';
+import { Link, useLocation, useMatchRoute, useRouter } from '@tanstack/react-router';
 import { cn } from 'components/redpanda-ui/lib/utils';
 import { ChevronLeft } from 'lucide-react';
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo } from 'react';
 
-import { AuthenticationMethod } from '../../protogen/redpanda/api/console/v1alpha1/authentication_pb';
 import { isEmbedded, isFeatureFlagEnabled } from '../../config';
 import { api, useApiStoreHook } from '../../state/backend-api';
 import { type BreadcrumbEntry, useUIStateStore } from '../../state/ui-state';
-import { IsDev, getBasePath } from '../../utils/env';
+import { IsDev } from '../../utils/env';
 import DataRefreshButton from '../misc/buttons/data-refresh/component';
-import { UserPreferencesButton, UserPreferencesDialog } from '../misc/user-preferences';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -31,8 +28,10 @@ import {
   BreadcrumbSeparator,
 } from '../redpanda-ui/components/breadcrumb';
 import { Button as RegistryButton } from '../redpanda-ui/components/button';
+import { CopyButton } from '../redpanda-ui/components/copy-button';
 import { Separator } from '../redpanda-ui/components/separator';
 import { SidebarTrigger } from '../redpanda-ui/components/sidebar';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../redpanda-ui/components/tooltip';
 
 type BreadcrumbHeaderRowProps = {
   useNewSidebar: boolean;
@@ -46,7 +45,7 @@ function BreadcrumbHeaderRow({ useNewSidebar, breadcrumbItems }: BreadcrumbHeade
         {useNewSidebar ? (
           <>
             <SidebarTrigger />
-            <Separator className="mr-2 h-4" orientation="vertical" />
+            <Separator className="mr-2 h-4 self-center" orientation="vertical" />
           </>
         ) : null}
         {isEmbedded() ? null : (
@@ -56,9 +55,7 @@ function BreadcrumbHeaderRow({ useNewSidebar, breadcrumbItems }: BreadcrumbHeade
                 <Fragment key={`${index}-${item.linkTo}`}>
                   {index > 0 && <BreadcrumbSeparator />}
                   <BreadcrumbItem>
-                    <BreadcrumbLink asChild>
-                      <Link to={item.linkTo}>{item.title}</Link>
-                    </BreadcrumbLink>
+                    <BreadcrumbLink render={<Link to={item.linkTo}>{item.title}</Link>} />
                   </BreadcrumbItem>
                 </Fragment>
               ))}
@@ -72,6 +69,7 @@ function BreadcrumbHeaderRow({ useNewSidebar, breadcrumbItems }: BreadcrumbHeade
 
 function AppPageHeader() {
   useApiStoreHook((s) => s.userData); // re-render when userData changes
+  const hideTitleRow = useRouteOwnsTitleRow();
   const showRefresh = useShouldShowRefresh();
   const shouldHideHeader = useShouldHideHeader();
   const useNewSidebar = !isEmbedded();
@@ -101,123 +99,96 @@ function AppPageHeader() {
     return null;
   }
 
-  return (
-    <div>
-      <BreadcrumbHeaderRow breadcrumbItems={breadcrumbItems} useNewSidebar={useNewSidebar} />
+  // Embedded, the breadcrumb row holds nothing (the host draws the breadcrumb, and there is
+  // no sidebar trigger), so without the title row the header is a bare divider.
+  if (hideTitleRow && isEmbedded()) {
+    return null;
+  }
 
-      <div className="flex items-center justify-between pt-6">
-        <div className="flex flex-col gap-1">
-          {backLink && (
-            <RegistryButton asChild className="-ml-2 w-fit text-muted-foreground" variant="ghost">
-              <Link to={backLink.linkTo}>
-                <ChevronLeft className="h-4 w-4" />
-                {backLink.title}
-              </Link>
-            </RegistryButton>
-          )}
-          <div className="flex items-center">
-            {pageTitle ? (
-              <Heading
-                className={cn('mr-2', lastBreadcrumb?.options?.canBeTruncated ? 'break-spaces break-all' : 'nowrap')}
-                level={1}
-              >
-                {pageTitle}
-              </Heading>
-            ) : null}
-            {lastBreadcrumb?.options?.canBeCopied ? (
-              <CopyButton content={lastBreadcrumb.title} variant="ghost" />
-            ) : null}
-            {Boolean(showRefresh) && <DataRefreshButton />}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {!isEmbedded() && api.isRedpanda && (
-            <Link to="/debug-bundle">
-              <Button
-                isDisabled={!api.userData?.canViewDebugBundle}
-                tooltip={
-                  api.userData?.canViewDebugBundle ? null : 'You need RedpandaCapability.MANAGE_DEBUG_BUNDLE permission'
+  return (
+    // Expanded pages release #mainLayout's gutter; keep the header off the viewport edge.
+    <div className="page-expanded-inset transition-[padding] duration-300 ease-in-out">
+      <BreadcrumbHeaderRow breadcrumbItems={breadcrumbItems} useNewSidebar={useNewSidebar} />
+      {/* Title + actions row. Hidden for breadcrumb-only headers (e.g. the SQL
+          studio, which carries its own title bar and toolbar). */}
+      {!hideTitleRow && (
+        <div className="flex items-center justify-between pt-6">
+          <div className="flex flex-col gap-1">
+            {backLink && (
+              <RegistryButton
+                className="-ml-2 w-fit text-muted-foreground"
+                render={
+                  <Link to={backLink.linkTo}>
+                    <ChevronLeft className="h-4 w-4" />
+                    {backLink.title}
+                  </Link>
                 }
                 variant="ghost"
-              >
-                Debug bundle
-              </Button>
-            </Link>
-          )}
-          <UserMenu />
-          {IsDev && !isEmbedded() && <ColorModeSwitch m={0} p={0} variant="ghost" />}
+              />
+            )}
+            <div className="flex items-center">
+              {pageTitle ? (
+                <h1
+                  className={cn(
+                    'mr-2 text-heading-xl',
+                    lastBreadcrumb?.options?.canBeTruncated ? 'break-spaces break-all' : 'nowrap'
+                  )}
+                >
+                  {pageTitle}
+                </h1>
+              ) : null}
+              {lastBreadcrumb?.options?.canBeCopied ? (
+                <CopyButton content={lastBreadcrumb.title} variant="ghost" />
+              ) : null}
+              {Boolean(showRefresh) && <DataRefreshButton />}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {!isEmbedded() &&
+              api.isRedpanda &&
+              (api.userData?.canViewDebugBundle ? (
+                <RegistryButton render={<Link to="/debug-bundle">Debug bundle</Link>} variant="ghost" />
+              ) : (
+                <TooltipProvider>
+                  <Tooltip>
+                    {/* span wrapper: a disabled button swallows pointer events, so it can't anchor the tooltip itself */}
+                    <TooltipTrigger
+                      render={
+                        <span className="inline-flex">
+                          <RegistryButton disabled variant="ghost">
+                            Debug bundle
+                          </RegistryButton>
+                        </span>
+                      }
+                    />
+                    <TooltipContent>You need RedpandaCapability.MANAGE_DEBUG_BUNDLE permission</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ))}
+            {IsDev && !isEmbedded() && <ColorModeSwitch m={0} p={0} variant="ghost" />}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
 export default AppPageHeader;
 
-const UserMenu = () => {
-  const [preferencesOpen, setPreferencesOpen] = useState(false);
+/**
+ * Whether the matched route draws its own title bar (`staticData.breadcrumbOnlyHeader`).
+ *
+ * Resolved from the pathname rather than `useMatches()`: committed matches lag the
+ * location by a render on soft navigation, flashing the title row on the way in.
+ */
+function useRouteOwnsTitleRow() {
+  const router = useRouter();
+  const { pathname } = useLocation();
 
-  const userData = api.userData;
-
-  if (
-    !userData ||
-    !userData.displayName ||
-    userData.authenticationMethod === AuthenticationMethod.NONE ||
-    userData.authenticationMethod === AuthenticationMethod.UNSPECIFIED
-  ) {
-    return <UserPreferencesButton />;
-  }
-
-  return (
-    <>
-      <Popover placement="bottom-end" trigger="click">
-        <PopoverTrigger>
-          <Button data-testid="user-menu" variant="ghost">
-            <Avatar name={userData.displayName} size="xs" src={userData.avatarUrl} />
-            <Text as="span" fontSize="sm" ml={2}>
-              {userData.displayName}
-            </Text>
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent>
-          <PopoverHeader>
-            Signed in as <strong>{userData.displayName}</strong>
-          </PopoverHeader>
-          <PopoverBody>
-            <Button
-              justifyContent="start"
-              onClick={() => {
-                setPreferencesOpen(true);
-              }}
-              variant="ghost"
-              w="full"
-            >
-              Preferences
-            </Button>
-            <Button
-              data-testid="user-menu-logout"
-              justifyContent="start"
-              onClick={async () => {
-                await api.logout();
-                // Hard-navigate to the login URL (not reload of the current
-                // page) so the app boots cleanly with no stale in-memory state
-                // and no SPA race between MobX observers, RequireAuth and the
-                // router during the auth transition.
-                window.location.assign(`${getBasePath() || ''}/login`);
-              }}
-              variant="ghost"
-              w="full"
-            >
-              Logout
-            </Button>
-          </PopoverBody>
-        </PopoverContent>
-      </Popover>
-
-      <UserPreferencesDialog isOpen={preferencesOpen} onClose={() => setPreferencesOpen(false)} />
-    </>
-  );
-};
+  return router
+    .getMatchedRoutes(pathname)
+    .matchedRoutes.some((route) => route.options.staticData?.breadcrumbOnlyHeader);
+}
 
 /**
  * Custom React Hook: Determines whether to show the refresh button based on route matches.
@@ -233,8 +204,6 @@ function useShouldShowRefresh() {
   const schemaCreateMatch = matchRoute({ to: '/schema-registry/create' });
   const topicProduceRecordMatch = matchRoute({ to: '/topics/$topicName/produce-record' });
   const secretsMatch = matchRoute({ to: '/secrets', fuzzy: false });
-  const connectWizardPagesMatch = matchRoute({ to: '/rp-connect/wizard' });
-  const getStartedApiMatch = matchRoute({ to: '/get-started/api' });
 
   // matches acls
   const aclDetailMatch = matchRoute({ to: '/security/acls/$aclName/details' });
@@ -270,13 +239,6 @@ function useShouldShowRefresh() {
   if (userDetailMatch) {
     return false;
   }
-  if (connectWizardPagesMatch) {
-    return false;
-  }
-  if (getStartedApiMatch) {
-    return false;
-  }
-
   return true;
 }
 function useShouldHideHeader() {
@@ -289,14 +251,11 @@ function useShouldHideHeader() {
     matchRoute({ to: '/rp-connect/$pipelineId/edit' }) ||
     matchRoute({ to: '/rp-connect/create' });
 
-  // Both flags are cloud-only (schema requires embedded mode).
-  // enablePipelineDiagrams: full new pipeline layout with diagrams.
-  // enableRpcnTiles: new tiles-based create flow embedded in legacy layout.
-  if (
-    isPipelineRoute &&
-    isEmbedded() &&
-    (isFeatureFlagEnabled('enablePipelineDiagrams') || isFeatureFlagEnabled('enableRpcnTiles'))
-  ) {
+  /**
+   * Flag is cloud-only (schema requires embedded mode).
+   * enablePipelineDiagrams: full new pipeline layout with diagrams.
+   */
+  if (isPipelineRoute && isEmbedded() && isFeatureFlagEnabled('enablePipelineDiagrams')) {
     return true;
   }
 
@@ -306,7 +265,7 @@ function useShouldHideHeader() {
   }
 
   // Pages that have their own header components - hide AppPageHeader for these
-  const pagesWithOwnHeaders = ['/mcp-servers', '/agents', '/knowledgebases', '/secrets', '/transcripts'];
+  const pagesWithOwnHeaders = ['/secrets'];
 
   // Check if current path starts with any of the pages that have their own headers
   return pagesWithOwnHeaders.some((page) => pathname.startsWith(page));

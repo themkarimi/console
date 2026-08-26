@@ -132,15 +132,13 @@ export function OneofFieldRenderer({
         {selectedField ? (
           selectedField.type === 'object' && (!selectedField.schema || selectedField.schema.length === 0) ? (
             <div className="rounded-lg border border-dashed bg-muted/30 px-4 py-3">
-              <p className="text-muted-foreground text-sm">
+              <p className="text-body text-muted-foreground">
                 {getLabel(selectedField)} selected. No additional configuration needed.
               </p>
             </div>
           ) : (
-            // Oneof values render conceptually one level deeper than the
-            // selector itself. Bumping depth here keeps headings consulted
-            // by ObjectWrapper consistent with siblings reached via
-            // plain nested-object paths.
+            // Oneof values render one level deeper than the selector, so bump depth to keep
+            // ObjectWrapper headings consistent with plain nested-object paths.
             <FormDepthProvider depth={depth + 1}>
               <AutoFormFieldRenderer field={selectedField} inheritedDisabled={isDisabled} path={[...path, 'value']} />
             </FormDepthProvider>

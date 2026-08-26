@@ -160,11 +160,6 @@ import {
   type Secret,
   type UpdateSecretRequest,
 } from '../protogen/redpanda/api/dataplane/v1/secret_pb';
-import type {
-  KnowledgeBase,
-  KnowledgeBaseCreate,
-  KnowledgeBaseUpdate,
-} from '../protogen/redpanda/api/dataplane/v1alpha3/knowledge_base_pb';
 import { appendWithSlackCap, boundedAppend, pruneMapToKeys } from '../utils/bounded-array';
 import { getBuildDate } from '../utils/env';
 import fetchWithTimeout from '../utils/fetch-with-timeout';
@@ -235,6 +230,22 @@ async function handle401(res: Response) {
   //   Any old/invalid JWT will be cleared by the server
   api.userData = null;
 
+  try {
+    const text = await res.text();
+    const obj = JSON.parse(text);
+    // biome-ignore lint/suspicious/noConsole: intentional console usage
+    console.log(`unauthorized message: ${text}`);
+
+    const err = obj as ApiError;
+    uiState.loginError = String(err.message);
+  } catch (err) {
+    uiState.loginError = String(err);
+  }
+
+  // Save current location url
+  // store.urlBeforeLogin = window.location.href;
+  // get current path
+
   // Check if we're in embedded mode using multiple signals to handle V1 Module Federation race conditions
   // where JWT might not be set yet when this function is called
   const inEmbeddedContext =
@@ -249,29 +260,11 @@ async function handle401(res: Response) {
       })
     );
     // Don't redirect - let the request fail gracefully and allow the host to handle auth
-  } else {
-    // Navigate to login immediately — before any async work — so that the MobX
-    // observer in RequireAuth sees the updated location when it re-renders due to
-    // userData becoming null. Without this, the observer fires during the async gap
-    // below and triggers a hard page reload via window.location.pathname instead of
-    // a clean SPA navigation.
-    appGlobal.historyPush('/login');
+    return;
   }
 
-  // Parse the error body in the background (non-blocking after navigation).
-  try {
-    const text = await res.text();
-    const obj = JSON.parse(text);
-    // biome-ignore lint/suspicious/noConsole: intentional console usage
-    console.log(`unauthorized message: ${text}`);
-
-    const err = obj as ApiError;
-    uiState.loginError = String(err.message);
-  } catch {
-    // Response body is not valid JSON (e.g. plain text "unauthorized: no valid session")
-    // This is expected when the user is simply not authenticated; don't surface a
-    // raw JSON parse error to the user.
-  }
+  // Non-embedded mode: redirect to login
+  appGlobal.historyPush('/login');
 }
 
 function processVersionInfo(headers: Headers) {
@@ -388,6 +381,7 @@ export async function handleExpiredLicenseError(r: Response) {
     api.userData = {
       canViewConsoleUsers: false,
       canListAcls: true,
+      canCreateAcls: true,
       canListQuotas: true,
       canPatchConfigs: true,
       canCreateRoles: true,
@@ -402,11 +396,10 @@ export async function handleExpiredLicenseError(r: Response) {
       canListTransforms: true,
       canCreateTransforms: true,
       canDeleteTransforms: true,
+      canViewDebugBundle: true,
       canCreateTopics: true,
       canDeleteTopics: true,
       canProduceMessages: true,
-      canCreateAcls: true,
-      canViewDebugBundle: true,
       displayName: '',
       avatarUrl: '',
       authenticationMethod: AuthenticationMethod.UNSPECIFIED,
@@ -541,10 +534,6 @@ const _apiCreator = (set: any, get: any) => ({
             canDeleteTransforms: r.permissions?.redpanda.includes(RedpandaCapability.MANAGE_TRANSFORMS),
             canViewDebugBundle: r.permissions?.redpanda.includes(RedpandaCapability.MANAGE_DEBUG_BUNDLE),
             canViewConsoleUsers: r.permissions?.redpanda.includes(RedpandaCapability.MANAGE_RBAC),
-            canCreateTopics: r.permissions?.kafkaClusterOperations.includes(KafkaAclOperation.CREATE),
-            canDeleteTopics: r.permissions?.kafkaClusterOperations.includes(KafkaAclOperation.DELETE),
-            canProduceMessages: r.permissions?.kafkaClusterOperations.includes(KafkaAclOperation.WRITE),
-            canCreateAcls: r.permissions?.kafkaClusterOperations.includes(KafkaAclOperation.ALTER),
           } as UserData,
         });
 
@@ -2404,108 +2393,6 @@ export const pipelinesApi = new Proxy<ReturnType<typeof _pipelinesCreator>>(
   }
 );
 
-const _knowledgebaseCreator = (set: any, _get: any) => ({
-  knowledgeBases: undefined as undefined | KnowledgeBase[],
-  knowledgeBasesError: null as ConnectError | null,
-
-  async refreshKnowledgeBases(_force: boolean): Promise<void> {
-    const client = appConfig.knowledgebaseClient;
-    if (!client) {
-      throw new Error('knowledgebase client is not initialized');
-    }
-
-    const knowledgeBases: KnowledgeBase[] = [];
-    set({ knowledgeBasesError: null });
-
-    let nextPageToken = '';
-    while (true) {
-      const res = await client
-        .listKnowledgeBases({ pageSize: 10, pageToken: nextPageToken })
-        .catch((error: ConnectError) => {
-          set({ knowledgeBasesError: error });
-          return;
-        });
-
-      // Handle response structure (some APIs return res.response, others return res directly)
-      const response = ((res as { response?: unknown })?.response || res) as {
-        knowledgeBases: KnowledgeBase[];
-        nextPageToken?: string;
-      };
-      if (!response) {
-        break;
-      }
-
-      knowledgeBases.push(...response.knowledgeBases);
-
-      if (!response.nextPageToken || response.nextPageToken.length === 0) {
-        break;
-      }
-      nextPageToken = response.nextPageToken;
-    }
-
-    set({ knowledgeBases });
-  },
-
-  async deleteKnowledgeBase(id: string) {
-    const client = appConfig.knowledgebaseClient;
-    if (!client) {
-      throw new Error('knowledgebase client is not initialized');
-    }
-
-    await client.deleteKnowledgeBase({ id });
-  },
-  async createKnowledgeBase(knowledgeBase: KnowledgeBaseCreate) {
-    const client = appConfig.knowledgebaseClient;
-    if (!client) {
-      throw new Error('knowledgebase client is not initialized');
-    }
-    const result = await client.createKnowledgeBase({ knowledgeBase });
-    return result;
-  },
-  async updateKnowledgeBase(id: string, knowledgeBaseUpdate: KnowledgeBaseUpdate, updateMask?: string[]) {
-    const client = appConfig.knowledgebaseClient;
-    if (!client) {
-      throw new Error('knowledgebase client is not initialized');
-    }
-
-    await client.updateKnowledgeBase({
-      id,
-      knowledgeBase: knowledgeBaseUpdate,
-      updateMask: updateMask
-        ? {
-            paths: updateMask,
-          }
-        : undefined,
-    });
-  },
-  async getKnowledgeBase(id: string): Promise<KnowledgeBase> {
-    const client = appConfig.knowledgebaseClient;
-    if (!client) {
-      throw new Error('knowledgebase client is not initialized');
-    }
-
-    const response = await client.getKnowledgeBase({ id });
-    if (!response.knowledgeBase) {
-      throw new Error('Knowledge base not found');
-    }
-    return response.knowledgeBase;
-  },
-});
-const useKnowledgebaseStore = zustandCreate(_knowledgebaseCreator);
-
-export const knowledgebaseApi = new Proxy<ReturnType<typeof _knowledgebaseCreator>>(
-  {} as ReturnType<typeof _knowledgebaseCreator>,
-  {
-    get(_: any, prop: string | symbol) {
-      return (useKnowledgebaseStore.getState() as any)[prop as string];
-    },
-    set(_: any, prop: string | symbol, value: unknown) {
-      useKnowledgebaseStore.setState({ [prop as string]: value } as any);
-      return true;
-    },
-  }
-);
-
 const _rpcnSecretManagerCreator = (set: any, get: any) => ({
   secrets: undefined as undefined | Secret[],
   secretsByPipeline: undefined as { secretId: string; pipelines: Pipeline[] }[] | undefined,
@@ -3134,7 +3021,6 @@ export {
   useApiStoreHook,
   useRolesStore,
   usePipelinesStore,
-  useKnowledgebaseStore,
   useRpcnSecretManagerStore,
   useTransformsStore,
 };

@@ -121,9 +121,9 @@ const KafkaConnectorMain = ({
 
   const hasRbacPermission = api.userData?.canCreateTopics !== false;
   const resolvedCanEdit = Boolean(canEdit) && hasRbacPermission;
-  const canEditTooltipLabel = !hasRbacPermission
-    ? "You don't have permission to perform this action"
-    : "You don't have 'canEditConnectCluster' permissions for this connect cluster";
+  const canEditTooltipLabel = hasRbacPermission
+    ? "You don't have 'canEditConnectCluster' permissions for this connect cluster"
+    : "You don't have permission to perform this action";
 
   return (
     <>
@@ -131,12 +131,7 @@ const KafkaConnectorMain = ({
       <Flex alignItems="center" flexDirection="row" gap="3">
         {/* [Pause/Resume] */}
         {connectClusterStore.validateConnectorState(connectorName, ['RUNNING', 'PAUSED']) ? (
-          <Tooltip
-            hasArrow={true}
-            isDisabled={resolvedCanEdit}
-            label={canEditTooltipLabel}
-            placement="top"
-          >
+          <Tooltip hasArrow={true} isDisabled={resolvedCanEdit} label={canEditTooltipLabel} placement="top">
             <Button
               isDisabled={!resolvedCanEdit}
               minWidth="32"
@@ -151,12 +146,7 @@ const KafkaConnectorMain = ({
         ) : null}
 
         {/* [Restart] */}
-        <Tooltip
-          hasArrow={true}
-          isDisabled={resolvedCanEdit}
-          label={canEditTooltipLabel}
-          placement="top"
-        >
+        <Tooltip hasArrow={true} isDisabled={resolvedCanEdit} label={canEditTooltipLabel} placement="top">
           <Button
             isDisabled={!resolvedCanEdit}
             minWidth="32"
@@ -170,12 +160,7 @@ const KafkaConnectorMain = ({
         </Tooltip>
 
         {/* [Delete] */}
-        <Tooltip
-          hasArrow={true}
-          isDisabled={resolvedCanEdit}
-          label={canEditTooltipLabel}
-          placement="top"
-        >
+        <Tooltip hasArrow={true} isDisabled={resolvedCanEdit} label={canEditTooltipLabel} placement="top">
           <Button
             colorScheme="red"
             isDisabled={!canEdit}
@@ -219,12 +204,7 @@ const KafkaConnectorMain = ({
 
                 {/* Update Config Button */}
                 <Flex m={4} mb={6}>
-                  <Tooltip
-                    hasArrow={true}
-                    isDisabled={resolvedCanEdit}
-                    label={canEditTooltipLabel}
-                    placement="top"
-                  >
+                  <Tooltip hasArrow={true} isDisabled={resolvedCanEdit} label={canEditTooltipLabel} placement="top">
                     <Button
                       isDisabled={!resolvedCanEdit}
                       onClick={() => {

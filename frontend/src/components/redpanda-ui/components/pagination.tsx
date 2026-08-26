@@ -2,7 +2,6 @@ import { ChevronLeftIcon, ChevronRightIcon, MoreHorizontalIcon } from 'lucide-re
 import React from 'react';
 
 import { type Button, buttonVariants } from './button';
-import { Text } from './typography';
 import { cn, type SharedProps } from '../lib/utils';
 
 function Pagination({ className, testId, ...props }: React.ComponentProps<'nav'> & SharedProps) {
@@ -57,23 +56,37 @@ function PaginationLink({ className, isActive, size = 'icon', testId, ...props }
   );
 }
 
-function PaginationPrevious({ className, ...props }: React.ComponentProps<typeof PaginationLink>) {
+function PaginationPrevious({
+  className,
+  text = 'Previous',
+  ...props
+}: React.ComponentProps<typeof PaginationLink> & { text?: string }) {
   return (
-    <PaginationLink aria-label="Go to previous page" className={cn('gap-1 px-2.5 sm:pl-2.5', className)} {...props}>
+    <PaginationLink
+      aria-label="Go to previous page"
+      className={cn('gap-1 px-2.5 sm:pl-2.5', className)}
+      size="md"
+      {...props}
+    >
       <ChevronLeftIcon />
-      <Text as="span" className="hidden sm:block">
-        Previous
-      </Text>
+      <span className="hidden text-body sm:block">{text}</span>
     </PaginationLink>
   );
 }
 
-function PaginationNext({ className, ...props }: React.ComponentProps<typeof PaginationLink>) {
+function PaginationNext({
+  className,
+  text = 'Next',
+  ...props
+}: React.ComponentProps<typeof PaginationLink> & { text?: string }) {
   return (
-    <PaginationLink aria-label="Go to next page" className={cn('gap-1 px-2.5 sm:pr-2.5', className)} {...props}>
-      <Text as="span" className="hidden sm:block">
-        Next
-      </Text>
+    <PaginationLink
+      aria-label="Go to next page"
+      className={cn('gap-1 px-2.5 sm:pr-2.5', className)}
+      size="md"
+      {...props}
+    >
+      <span className="hidden text-body sm:block">{text}</span>
       <ChevronRightIcon />
     </PaginationLink>
   );
@@ -89,9 +102,7 @@ function PaginationEllipsis({ className, testId, ...props }: React.ComponentProp
       {...props}
     >
       <MoreHorizontalIcon className="size-4" />
-      <Text as="span" className="sr-only">
-        More pages
-      </Text>
+      <span className="sr-only">More pages</span>
     </span>
   );
 }
@@ -131,7 +142,6 @@ function SimplePagination({
       }
     }
 
-    // Add ellipsis at the beginning
     if (showEllipsis && startPage > 1) {
       pages.push(1);
       if (startPage > 2) {
@@ -139,12 +149,10 @@ function SimplePagination({
       }
     }
 
-    // Add visible pages
     for (let i = startPage; i <= endPage; i++) {
       pages.push(i);
     }
 
-    // Add ellipsis at the end
     if (showEllipsis && endPage < totalPages) {
       if (endPage < totalPages - 1) {
         pages.push('ellipsis-end');
@@ -162,21 +170,22 @@ function SimplePagination({
   };
 
   const pages = generatePages();
+  const isFirstPage = currentPage <= 1;
+  const isLastPage = currentPage >= totalPages;
 
   return (
     <Pagination className={className} testId={testId}>
       <PaginationContent>
         <PaginationItem>
           <PaginationPrevious
+            aria-disabled={isFirstPage || undefined}
+            className={isFirstPage ? 'pointer-events-none opacity-50' : undefined}
             href="#"
             onClick={(e) => {
               e.preventDefault();
               handlePageClick(currentPage - 1);
             }}
-            style={{
-              pointerEvents: currentPage <= 1 ? 'none' : 'auto',
-              opacity: currentPage <= 1 ? 0.5 : 1,
-            }}
+            tabIndex={isFirstPage ? -1 : undefined}
           />
         </PaginationItem>
 
@@ -201,15 +210,14 @@ function SimplePagination({
 
         <PaginationItem>
           <PaginationNext
+            aria-disabled={isLastPage || undefined}
+            className={isLastPage ? 'pointer-events-none opacity-50' : undefined}
             href="#"
             onClick={(e) => {
               e.preventDefault();
               handlePageClick(currentPage + 1);
             }}
-            style={{
-              pointerEvents: currentPage >= totalPages ? 'none' : 'auto',
-              opacity: currentPage >= totalPages ? 0.5 : 1,
-            }}
+            tabIndex={isLastPage ? -1 : undefined}
           />
         </PaginationItem>
       </PaginationContent>

@@ -7,7 +7,7 @@ import { useAutoFormRuntimeContext } from './context';
 import type { ArrayElementWrapperProps, ArrayWrapperProps, FieldWrapperProps, ObjectWrapperProps } from './core-types';
 import { formSpacing } from './form-spacing';
 import { getFieldDescriptionText, getFieldDocsUrl, getFieldHelpText, getFieldUiConfig } from './helpers';
-import { FormDepthProvider, headingLevelForDepth, useFormDepth } from './layout-context';
+import { DepthHeading, FormDepthProvider, headingLevelForDepth, useFormDepth } from './layout-context';
 import { getAutoFormFieldTestId } from './test-ids';
 import type { SharedProps } from '../../lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '../alert';
@@ -15,7 +15,6 @@ import { Button } from '../button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../collapsible';
 import { Field, FieldDescription, FieldError, FieldLabel } from '../field';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../tooltip';
-import { Heading, Text } from '../typography';
 
 const REGEX_ERROR_PATTERN = /regex pattern\s*`([^`]+)`/;
 
@@ -102,40 +101,30 @@ export const FieldWrapper: React.FC<FieldWrapperProps> = ({ label, children, id,
       : field.key;
   const fieldTestId = getAutoFormFieldTestId(testIdPrefix, id);
 
-  // Match the non-AutoForm usage pattern in managed-create-form.tsx:
-  // `<Field>` with label / control / description / error as *direct*
-  // siblings, so the Field component's native `gap-3` drives the
-  // label → input → description → error rhythm. The previous
-  // `<Field gap-2><FieldContent gap-2>` nesting produced a cramped
-  // 8px label/input gap and misaligned the internal rhythm from every
-  // manually-constructed form in the app — users could spot the
-  // AutoForm at a glance from the tighter stack alone.
+  // Keep label/control/description/error as direct Field children so the Field's
+  // native gap-3 drives the rhythm, matching manually-composed forms.
   return (
     <Field data-disabled={isDisabled} data-invalid={Boolean(error)} testId={fieldTestId}>
       {isCompact ? null : (
         <div className="flex items-center gap-2">
           <FieldLabel className={hasVisibleLabel ? 'items-center gap-2' : 'sr-only'} htmlFor={id}>
-            <Text as="span" variant="labelStrongSmall">
-              {hasVisibleLabel ? label : fallbackLabel}
-            </Text>
-            {field.required ? (
-              <Text as="span" className="text-destructive" variant="small">
-                *
-              </Text>
-            ) : null}
+            <span className="font-semibold text-label">{hasVisibleLabel ? label : fallbackLabel}</span>
+            {field.required ? <span className="text-body-sm text-destructive">*</span> : null}
           </FieldLabel>
           {tooltipText ? (
             <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  aria-label="Field help"
-                  className="inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition hover:text-foreground"
-                  data-testid={getAutoFormFieldTestId(testIdPrefix, id, 'help')}
-                  type="button"
-                >
-                  <CircleHelp className="h-4 w-4" />
-                </button>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <button
+                    aria-label="Field help"
+                    className="inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition hover:text-foreground"
+                    data-testid={getAutoFormFieldTestId(testIdPrefix, id, 'help')}
+                    type="button"
+                  >
+                    <CircleHelp className="h-4 w-4" />
+                  </button>
+                }
+              />
               <TooltipContent
                 className="max-w-sm text-pretty text-xs"
                 testId={getAutoFormFieldTestId(testIdPrefix, id, 'help-content')}
@@ -186,14 +175,10 @@ export const ObjectWrapper: React.FC<ObjectWrapperProps & { testId?: string; has
   const hasVisibleLabel = !(typeof label === 'string' && label.trim().length === 0);
   const customData = (field.fieldConfig?.customData ?? {}) as Record<string, unknown>;
   const isCollapsible = Boolean(customData.collapsible);
-  // Divider under a section header. Defaults to true for parity with the
-  // historical ObjectWrapper behavior. Consumers can opt out by setting
-  // `customData.showDivider = false` — same escape hatch as FormSection's
-  // `divider` prop so both entry points agree on when a rule renders.
+  // Defaults true; consumers opt out via customData.showDivider, mirroring FormSection's divider prop.
   const showDivider = customData.showDivider !== false && hasVisibleLabel;
   const [isOpen, setIsOpen] = React.useState(false);
 
-  // Auto-expand when section has validation errors
   React.useEffect(() => {
     if (hasError && !isOpen) {
       setIsOpen(true);
@@ -204,35 +189,29 @@ export const ObjectWrapper: React.FC<ObjectWrapperProps & { testId?: string; has
     return (
       <Collapsible onOpenChange={setIsOpen} open={isOpen}>
         <section className={formSpacing.field} data-testid={testId}>
-          <CollapsibleTrigger asChild>
-            <button
-              className={
-                showDivider
-                  ? `flex w-full items-center justify-between text-left ${formSpacing.sectionDivider}`
-                  : 'flex w-full items-center justify-between text-left'
-              }
-              type="button"
-            >
-              <div className={formSpacing.sectionHeader}>
-                <div className="flex items-center gap-2">
-                  <Heading className="font-medium" level={headingLevel}>
-                    {label}
-                  </Heading>
-                  {field.required ? (
-                    <Text as="span" className="text-destructive" variant="small">
-                      *
-                    </Text>
-                  ) : null}
+          <CollapsibleTrigger
+            render={
+              <button
+                className={
+                  showDivider
+                    ? `flex w-full items-center justify-between text-left ${formSpacing.sectionDivider}`
+                    : 'flex w-full items-center justify-between text-left'
+                }
+                type="button"
+              >
+                <div className={formSpacing.sectionHeader}>
+                  <div className="flex items-center gap-2">
+                    <DepthHeading className="font-medium" level={headingLevel}>
+                      {label}
+                    </DepthHeading>
+                    {field.required ? <span className="text-body-sm text-destructive">*</span> : null}
+                  </div>
+                  {helpText ? <div className="text-body-sm text-muted-foreground">{helpText}</div> : null}
                 </div>
-                {helpText ? (
-                  <Text className="text-muted-foreground" variant="small">
-                    {helpText}
-                  </Text>
-                ) : null}
-              </div>
-              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
-            </button>
-          </CollapsibleTrigger>
+                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none [[data-panel-open]_&]:rotate-180" />
+              </button>
+            }
+          />
           <CollapsibleContent>
             <FormDepthProvider depth={depth + 1}>
               <div className={formSpacing.field}>{children}</div>
@@ -252,20 +231,12 @@ export const ObjectWrapper: React.FC<ObjectWrapperProps & { testId?: string; has
           }
         >
           <div className="flex items-center gap-2">
-            <Heading className="font-medium" level={headingLevel}>
+            <DepthHeading className="font-medium" level={headingLevel}>
               {label}
-            </Heading>
-            {field.required ? (
-              <Text as="span" className="text-destructive" variant="small">
-                *
-              </Text>
-            ) : null}
+            </DepthHeading>
+            {field.required ? <span className="text-body-sm text-destructive">*</span> : null}
           </div>
-          {helpText ? (
-            <Text className="text-muted-foreground" variant="small">
-              {helpText}
-            </Text>
-          ) : null}
+          {helpText ? <div className="text-body-sm text-muted-foreground">{helpText}</div> : null}
         </div>
       ) : null}
       <FormDepthProvider depth={depth + 1}>

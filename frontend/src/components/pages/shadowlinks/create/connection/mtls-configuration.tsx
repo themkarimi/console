@@ -15,7 +15,6 @@ import { Dropzone, DropzoneContent, DropzoneEmptyState } from 'components/redpan
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from 'components/redpanda-ui/components/form';
 import { Input } from 'components/redpanda-ui/components/input';
 import { Tabs, TabsList, TabsTrigger } from 'components/redpanda-ui/components/tabs';
-import { Text } from 'components/redpanda-ui/components/typography';
 import { cn } from 'components/redpanda-ui/lib/utils';
 import { SecretSelector, type SecretSelectorCustomText } from 'components/ui/secret/secret-selector';
 import { isEmbedded } from 'config';
@@ -259,47 +258,31 @@ function DisclosureRow({
 }: DisclosureRowProps) {
   return (
     <Collapsible onOpenChange={onOpenChange} open={open} testId={testId}>
-      <CollapsibleTrigger asChild>
-        <button
-          className="-mx-2 flex w-full items-start gap-2 rounded-md px-2 py-2 text-left hover:bg-muted/50"
-          data-testid={triggerTestId}
-          type="button"
-        >
-          <ChevronRight
-            className={cn('mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-90')}
-          />
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-sm">{label}</span>
-              {configured && !open && (
-                <Badge size="sm" variant="success-inverted">
-                  Configured
-                </Badge>
-              )}
+      <CollapsibleTrigger
+        render={
+          <button
+            className="-mx-2 flex w-full items-start gap-2 rounded-md px-2 py-2 text-left hover:bg-muted/50"
+            data-testid={triggerTestId}
+            type="button"
+          >
+            <ChevronRight
+              className={cn('mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-90')}
+            />
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-sm">{label}</span>
+                {configured && !open && (
+                  <Badge size="sm" variant="success-inverted">
+                    Configured
+                  </Badge>
+                )}
+              </div>
+              <div className="mt-0.5 text-body-sm text-muted-foreground">{description}</div>
             </div>
-            <Text className="mt-0.5 text-xs" variant="muted">
-              {description}
-            </Text>
-          </div>
-        </button>
-      </CollapsibleTrigger>
-      <CollapsibleContent
-        animate={{
-          opacity: 1,
-          height: 'auto',
-          overflow: 'hidden',
-          transition: { duration: 0.05, ease: 'easeOut' },
-        }}
-        className="mt-2 ml-6 rounded-md border bg-muted/30 p-4"
-        exit={{
-          opacity: 0,
-          height: 0,
-          overflow: 'hidden',
-          transition: { duration: 0.05, ease: 'easeIn' },
-        }}
-      >
-        {children}
-      </CollapsibleContent>
+          </button>
+        }
+      />
+      <CollapsibleContent className="mt-2 ml-6 rounded-md border bg-muted/30 p-4">{children}</CollapsibleContent>
     </Collapsible>
   );
 }
@@ -341,9 +324,9 @@ function MtlsErrors({ errors }: { errors: FieldErrors<FormValues> }) {
   return (
     <div className="flex flex-col gap-1" data-testid="mtls-certificates-errors">
       {messages.map((msg) => (
-        <Text className="text-destructive text-sm" key={msg}>
+        <div className="text-body text-destructive" key={msg}>
           {msg}
-        </Text>
+        </div>
       ))}
     </div>
   );
@@ -435,9 +418,9 @@ export const MtlsConfiguration = () => {
       >
         <div className="flex flex-col gap-4">
           <MtlsCertFields embedded={isEmbedded()} useFilePath={useFilePathInputs} />
-          <Text className="text-xs" data-testid="tls-mtls-pair-hint" variant="muted">
+          <div className="text-body-sm text-muted-foreground" data-testid="tls-mtls-pair-hint">
             Client certificate and private key must be provided together.
-          </Text>
+          </div>
           <MtlsErrors errors={errors} />
         </div>
       </DisclosureRow>

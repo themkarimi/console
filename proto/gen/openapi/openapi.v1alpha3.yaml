@@ -384,6 +384,19 @@ components:
         type:
           $ref: '#/components/schemas/CatalogType'
       type: object
+    CatalogHealth:
+      description: |-
+        CatalogHealth reports whether the Iceberg catalog is reachable. On failure,
+        error_code is the iceberg::catalog_errc enum name (e.g. "io_error",
+        "timedout") and error_message is a human-readable diagnostic.
+      properties:
+        error_code:
+          type: string
+        error_message:
+          type: string
+        reachable:
+          type: boolean
+      type: object
     CatalogType:
       description: Catalog backing-storage type. Sourced from `system.catalogs.type`.
       enum:
@@ -392,6 +405,13 @@ components:
     Column:
       description: Column descriptor for a table or query result.
       properties:
+        fields:
+          description: |-
+            Nested columns for a composite/struct (json) column, parsed from the
+            engine's structural type. Empty for scalar columns.
+          items:
+            $ref: '#/components/schemas/Column'
+          type: array
         name:
           type: string
         type:
@@ -606,6 +626,15 @@ components:
         ai_agent:
           $ref: '#/components/schemas/AIAgent'
       type: object
+    GetIcebergStatusResponse:
+      properties:
+        catalog:
+          $ref: '#/components/schemas/CatalogHealth'
+        topics:
+          items:
+            $ref: '#/components/schemas/TopicIcebergStatus'
+          type: array
+      type: object
     GetKnowledgeBaseResponse:
       properties:
         knowledge_base:
@@ -623,6 +652,30 @@ components:
           items:
             $ref: '#/components/schemas/ConfigurationYAMLSchema'
           type: array
+      type: object
+    GetSqlConnectionInfoResponse:
+      properties:
+        host:
+          description: |-
+            Advertised host clients use to reach the SQL endpoint. Empty when no
+            endpoint is configured.
+          type: string
+        port:
+          description: Port for the SQL endpoint, derived from the configured connection URL.
+          format: int64
+          type: integer
+      type: object
+    GetSqlIdentityResponse:
+      properties:
+        current_user:
+          description: Engine username the caller is connected as (SQL `current_user`).
+          type: string
+        is_admin:
+          description: |-
+            True when the caller holds administrative (superuser) privileges in the
+            engine, i.e. may perform write/DDL actions. Sourced from
+            `pg_roles.rolsuper`.
+          type: boolean
       type: object
     GetTraceHistogramResponse:
       description: GetTraceHistogramResponse is the response message for getting the trace histogram.
@@ -663,6 +716,16 @@ components:
         base_url:
           type: string
       type: object
+    IcebergLifecycleState:
+      description: |-
+        IcebergLifecycleState mirrors the coordinator's per-topic lifecycle. Named
+        distinctly from the internal DatalakeService's LifecycleState because both
+        generate into the proto::admin C++ namespace.
+      enum:
+        - ICEBERG_LIFECYCLE_STATE_LIVE
+        - ICEBERG_LIFECYCLE_STATE_CLOSED
+        - ICEBERG_LIFECYCLE_STATE_PURGED
+      type: string
     InstantResult:
       description: A single data point for a label combination at a specific point in time.
       properties:
@@ -1563,6 +1626,32 @@ components:
       required:
         - base_url
       type: object
+    PartitionIcebergStatus:
+      properties:
+        commit_lag:
+          description: |-
+            Number of records written to Parquet but not yet committed to the
+            catalog.
+          format: int64
+          type: string
+        last_committed_offset:
+          description: |-
+            Last Kafka offset committed to the Iceberg catalog. Unset if nothing has
+            been committed yet.
+          format: int64
+          nullable: true
+          type: string
+        last_translated_offset:
+          description: |-
+            Highest Kafka offset written to Parquet (inclusive). Unset if nothing
+            has been translated yet.
+          format: int64
+          nullable: true
+          type: string
+        partition:
+          format: int32
+          type: integer
+      type: object
     QueryMetadata:
       description: A description of a predefined query available in the system.
       properties:
@@ -2008,6 +2097,17 @@ components:
           type: string
       required:
         - config_yaml
+      type: object
+    TopicIcebergStatus:
+      properties:
+        lifecycle_state:
+          $ref: '#/components/schemas/IcebergLifecycleState'
+        partitions:
+          items:
+            $ref: '#/components/schemas/PartitionIcebergStatus'
+          type: array
+        topic:
+          type: string
       type: object
     Trace:
       description: Trace represents a complete distributed trace with all its spans.
@@ -2634,6 +2734,36 @@ paths:
       summary: Stop AI Agent
       tags:
         - AI Agents
+  /v1alpha3/iceberg/status:
+    get:
+      description: 'Get Iceberg Status. Optional: filter based on topic names.'
+      operationId: IcebergService_GetIcebergStatus
+      parameters:
+        - description: |-
+            Names of Iceberg topics to report on. If empty, returns all Iceberg
+            topics known to the coordinator.
+          in: query
+          name: topics_filter
+          schema:
+            items:
+              type: string
+            type: array
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetIcebergStatusResponse'
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpc.Status'
+          description: An unexpected error response.
+      summary: Get Iceberg Status
+      tags:
+        - IcebergService
   /v1alpha3/knowledge-bases:
     get:
       operationId: KnowledgeBaseService_ListKnowledgeBases
@@ -3259,6 +3389,44 @@ paths:
       summary: Describe table
       tags:
         - SQL
+  /v1alpha3/sql/connection-info:
+    get:
+      operationId: SQLService_GetSqlConnectionInfo
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetSqlConnectionInfoResponse'
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpc.Status'
+          description: An unexpected error response.
+      summary: Get SQL connection info
+      tags:
+        - SQL
+  /v1alpha3/sql/identity:
+    get:
+      operationId: SQLService_GetSqlIdentity
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetSqlIdentityResponse'
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpc.Status'
+          description: An unexpected error response.
+      summary: Get SQL identity
+      tags:
+        - SQL
   /v1alpha3/sql/queries:
     post:
       operationId: SQLService_ExecuteQuery
@@ -3553,6 +3721,7 @@ servers:
 tags:
   - description: Create and manage AI agents and their configurations.
     name: AI Agents
+  - name: IcebergService
   - description: Create and manage retrieval-augmented generation (RAG) knowledge bases.
     name: Redpanda AI KnowledgeBase
   - description: Create and manage MCP servers and their configurations.

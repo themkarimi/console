@@ -71,7 +71,7 @@ class KafkaClusterDetails extends PageComponent<{ clusterName: string }> {
         {/* Main Card */}
         <Section>
           {/* Connectors List */}
-          <ConnectorsList clusterName={clusterName} connectors={connectors ?? []} cluster={cluster} />
+          <ConnectorsList cluster={cluster} clusterName={clusterName} connectors={connectors ?? []} />
 
           {/* Plugin List */}
           <div style={{ marginTop: '2em', display: isEmbedded() ? 'none' : 'block' }}>
@@ -106,16 +106,24 @@ class KafkaClusterDetails extends PageComponent<{ clusterName: string }> {
   }
 }
 
-const ConnectorsList = ({ clusterName, connectors, cluster }: { clusterName: string; connectors: ClusterConnectorInfo[]; cluster?: ClusterConnectors }) => {
+const ConnectorsList = ({
+  clusterName,
+  connectors,
+  cluster,
+}: {
+  clusterName: string;
+  connectors: ClusterConnectorInfo[];
+  cluster?: ClusterConnectors;
+}) => {
   const [filteredResults, setFilteredResults] = useState<ClusterConnectorInfo[]>([]);
   const [searchText, setSearchText] = useState(uiSettings.connectorsList.quickSearch);
 
   const canCreateConnector = api.userData?.canCreateTopics !== false;
   const canEditCluster = cluster?.canEditCluster !== false;
   const canCreate = canCreateConnector && canEditCluster;
-  const createTooltipLabel = !canCreateConnector
-    ? "You don't have permission to create connectors"
-    : "You don't have 'editConnectCluster' permissions for this connect cluster";
+  const createTooltipLabel = canCreateConnector
+    ? "You don't have 'editConnectCluster' permissions for this connect cluster"
+    : "You don't have permission to create connectors";
 
   const dataSource = useCallback(() => connectors, [connectors]);
 
@@ -141,12 +149,7 @@ const ConnectorsList = ({ clusterName, connectors, cluster }: { clusterName: str
   return (
     <div>
       <div style={{ display: 'flex', marginBottom: '.5em' }}>
-        <Tooltip
-          hasArrow={true}
-          isDisabled={canCreate}
-          label={createTooltipLabel}
-          placement="top"
-        >
+        <Tooltip hasArrow={true} isDisabled={canCreate} label={createTooltipLabel} placement="top">
           {canCreate ? (
             <Link params={{ clusterName }} to="/connect-clusters/$clusterName/create-connector">
               <Button variant="solid">Create connector</Button>

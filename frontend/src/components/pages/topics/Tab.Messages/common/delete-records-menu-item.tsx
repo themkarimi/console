@@ -9,10 +9,11 @@
  * by the Apache License, Version 2.0
  */
 
-import { Button, Tooltip } from '@redpanda-data/ui';
+import { Button } from 'components/redpanda-ui/components/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from 'components/redpanda-ui/components/tooltip';
 
-import type { TopicAction } from '../../../../../state/rest-interfaces';
 import { api } from '../../../../../state/backend-api';
+import type { TopicAction } from '../../../../../state/rest-interfaces';
 import { getDeleteErrorText, isDeleteEnabled } from '../helpers';
 
 export function DeleteRecordsMenuItem(
@@ -22,22 +23,26 @@ export function DeleteRecordsMenuItem(
 ) {
   const hasRbacPermission = api.userData?.canDeleteTopics !== false;
   const isEnabled = hasRbacPermission && isDeleteEnabled(isCompacted, allowedActions);
-  const errorText = !hasRbacPermission
-    ? "You don't have permission to delete records"
-    : getDeleteErrorText(isCompacted, allowedActions);
+  const errorText = hasRbacPermission
+    ? getDeleteErrorText(isCompacted, allowedActions)
+    : "You don't have permission to delete records";
 
-  let content: JSX.Element | string = 'Delete Records';
+  const button = (
+    <Button disabled={!isEnabled} onClick={onClick} variant="destructive-outline">
+      Delete Records
+    </Button>
+  );
+
   if (errorText) {
-    content = (
-      <Tooltip hasArrow label={errorText} placement="top">
-        {content}
-      </Tooltip>
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger render={<span>{button}</span>} />
+          <TooltipContent side="top">{errorText}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   }
 
-  return (
-    <Button isDisabled={!isEnabled} onClick={onClick} variant="outline">
-      {content}
-    </Button>
-  );
+  return button;
 }

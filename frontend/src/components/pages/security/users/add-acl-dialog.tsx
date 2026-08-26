@@ -50,7 +50,7 @@ import {
 } from '../../../redpanda-ui/components/form';
 import { Input } from '../../../redpanda-ui/components/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../redpanda-ui/components/select';
-import { InlineCode, Text } from '../../../redpanda-ui/components/typography';
+import { InlineCode } from '../../../redpanda-ui/components/typography';
 
 const schema = z.object({
   principal: z.string().min(1, 'Principal is required'),
@@ -341,7 +341,7 @@ export const AddAclDialog = ({ open, onOpenChange, principal }: AddAclDialogProp
                           ))}
                         </div>
                         {PATTERN_TYPE_HELP[field.value] && (
-                          <Text className="mt-1 text-muted-foreground text-sm">{PATTERN_TYPE_HELP[field.value]}</Text>
+                          <div className="mt-1 text-body text-muted-foreground">{PATTERN_TYPE_HELP[field.value]}</div>
                         )}
                         <FormMessage />
                       </FormItem>
@@ -404,10 +404,10 @@ export const AddAclDialog = ({ open, onOpenChange, principal }: AddAclDialogProp
                             <SelectValue>
                               {(value) => {
                                 if (value === String(ACL_PermissionType.ALLOW)) {
-                                  return <span className="text-green-600">Allow</span>;
+                                  return <span className="text-success">Allow</span>;
                                 }
                                 if (value === String(ACL_PermissionType.DENY)) {
-                                  return <span className="text-red-600">Deny</span>;
+                                  return <span className="text-error">Deny</span>;
                                 }
                                 return null;
                               }}
@@ -416,10 +416,10 @@ export const AddAclDialog = ({ open, onOpenChange, principal }: AddAclDialogProp
                         </FormControl>
                         <SelectContent>
                           <SelectItem value={String(ACL_PermissionType.ALLOW)}>
-                            <span className="text-green-600">Allow</span>
+                            <span className="text-success">Allow</span>
                           </SelectItem>
                           <SelectItem value={String(ACL_PermissionType.DENY)}>
-                            <span className="text-red-600">Deny</span>
+                            <span className="text-error">Deny</span>
                           </SelectItem>
                         </SelectContent>
                       </Select>

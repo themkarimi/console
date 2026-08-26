@@ -4,7 +4,6 @@ import { useFormContext } from 'react-hook-form';
 
 import { AutoFormFieldRenderer } from './index';
 import { getRenderedLabel, useFieldPresentation } from './shared';
-import { Text } from '../../typography';
 import { useAutoFormRenderContext, useAutoFormRuntimeContext } from '../context';
 import type { ParsedField } from '../core-types';
 import { getPathInObject } from '../field-utils';
@@ -30,8 +29,7 @@ export function ObjectFieldRenderer({
   const { isVisible, renderField } = useFieldPresentation(field, path, inheritedDisabled);
   const { testIdPrefix } = useAutoFormRuntimeContext();
 
-  // Check for errors on the object itself or any descendant field.
-  // This ensures collapsible sections auto-expand when a child has an error.
+  // Include descendant errors so collapsible sections auto-expand when a child is invalid.
   const errorAtPath = getPathInObject(errors as Record<string, unknown>, path);
   const hasDescendantError = errorAtPath !== undefined && errorAtPath !== null && typeof errorAtPath === 'object';
   const hasError = Boolean(error) || hasDescendantError;
@@ -42,12 +40,8 @@ export function ObjectFieldRenderer({
 
   const ObjectWrapperComponent = uiComponents.ObjectWrapper;
 
-  // Render the error inline as a sibling of the section only when present.
-  // The previous version reserved a `min-h-5` slot unconditionally, which
-  // added ~20px of whitespace under every nested object and drifted the
-  // rhythm away from manually-composed Field-based forms. A naked
-  // `<section>` + optional error line lets the parent's `formSpacing.form`
-  // token drive the gap between siblings without any extra padding.
+  // Render the error inline only when present (no reserved slot) so the parent's
+  // formSpacing.form token drives sibling gaps without extra whitespace.
   return (
     <>
       <ObjectWrapperComponent field={renderField} hasError={hasError} label={label}>
@@ -61,13 +55,12 @@ export function ObjectFieldRenderer({
         ))}
       </ObjectWrapperComponent>
       {error ? (
-        <Text
-          className="whitespace-pre-wrap text-destructive"
+        <div
+          className="whitespace-pre-wrap text-body-sm text-destructive"
           data-testid={getAutoFormFieldTestId(testIdPrefix, fullPath, 'error')}
-          variant="small"
         >
           {error}
-        </Text>
+        </div>
       ) : null}
     </>
   );

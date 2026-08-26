@@ -6,20 +6,14 @@ export const BUILDER_API_KEY = '4abd0efa0759420b88149ada5c1eb216';
 
 // By default, most feature flags will be false when there's no embedded mode on.
 export const FEATURE_FLAGS = {
-  enableKnowledgeBaseInConsoleUi: false,
-  enableRemoteMcpInConsole: false,
-  enableRpcnTiles: false,
   enableRpcnTemplateGallery: false,
-  enableServerlessOnboardingWizard: false,
-  enableApiKeyConfigurationAgent: false,
+  enableRpcnVisualEditor: false,
   enableDataplaneObservabilityServerless: false,
   enableDataplaneObservability: false,
   enableNewPipelineLogs: false,
   enablePipelineDiagrams: false,
   enableConnectSlashMenu: false,
-  enableTeamsBridge: false,
   enableNewSecurityPage: true,
-  enableNewTopicPage: false,
 };
 
 // Cloud-managed tag keys for service account integration

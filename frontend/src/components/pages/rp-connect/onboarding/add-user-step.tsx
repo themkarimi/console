@@ -30,7 +30,7 @@ import {
 } from 'components/redpanda-ui/components/select';
 import { Tabs, TabsList, TabsTrigger } from 'components/redpanda-ui/components/tabs';
 import { ToggleGroup, ToggleGroupItem } from 'components/redpanda-ui/components/toggle-group';
-import { Heading, List, ListItem, Text } from 'components/redpanda-ui/components/typography';
+import { List, ListItem } from 'components/redpanda-ui/components/typography';
 import {
   ServiceAccountSelector,
   type ServiceAccountSelectorRef,
@@ -107,7 +107,6 @@ export const AddUserStep = forwardRef<UserStepRef, AddUserStepProps & MotionProp
       hideTitle,
       className,
       inline = false,
-      ...motionProps
     },
     ref
     // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Complex form with dual auth methods requires conditional logic
@@ -431,15 +430,14 @@ export const AddUserStep = forwardRef<UserStepRef, AddUserStepProps & MotionProp
                   {selectionMode === 'both' && (
                     <ToggleGroup
                       disabled={isPending}
-                      onValueChange={(value) => {
+                      onValueChange={([value]) => {
                         // Prevent deselection - ToggleGroup emits empty string when trying to deselect
                         if (!value) {
                           return;
                         }
                         handleUserSelectionTypeChange(value as CreatableSelectionType);
                       }}
-                      type="single"
-                      value={userSelectionType}
+                      value={[userSelectionType]}
                       variant="outline"
                     >
                       <ToggleGroupItem
@@ -531,7 +529,7 @@ export const AddUserStep = forwardRef<UserStepRef, AddUserStepProps & MotionProp
                           <CircleAlert className="h-4 w-4" /> User does not have required permissions
                         </AlertTitle>
                         <AlertDescription>
-                          <Text as="div" variant="small">
+                          <div className="text-body-sm">
                             The user <b>{existingUserSelected.name}</b> requires the following permissions for the{' '}
                             <b>{topicName}</b> topic:
                             <List>
@@ -539,11 +537,11 @@ export const AddUserStep = forwardRef<UserStepRef, AddUserStepProps & MotionProp
                                 <ListItem key={permission}>{getACLOperationName(permission)}</ListItem>
                               ))}
                             </List>
-                          </Text>
-                          <Text variant="small">
+                          </div>
+                          <div className="text-body-sm">
                             Edit the user's{' '}
                             <TanStackRouterLink
-                              className="text-blue-800"
+                              className="text-informative"
                               params={{ userName: existingUserSelected.name }}
                               rel="noopener noreferrer"
                               target="_blank"
@@ -552,7 +550,7 @@ export const AddUserStep = forwardRef<UserStepRef, AddUserStepProps & MotionProp
                               ACLs
                             </TanStackRouterLink>{' '}
                             to add permissions.
-                          </Text>
+                          </div>
                         </AlertDescription>
                       </Alert>
                     )}
@@ -566,7 +564,7 @@ export const AddUserStep = forwardRef<UserStepRef, AddUserStepProps & MotionProp
                           <CircleAlert className="h-4 w-4" /> User has required permissions
                         </AlertTitle>
                         <AlertDescription>
-                          <Text as="div" variant="small">
+                          <div className="text-body-sm">
                             The user <b>{existingUserSelected.name}</b> has the following permissions for the{' '}
                             <b>{topicName}</b> topic:
                             <List>
@@ -574,7 +572,7 @@ export const AddUserStep = forwardRef<UserStepRef, AddUserStepProps & MotionProp
                                 <ListItem key={permission}>{getACLOperationName(permission)}</ListItem>
                               ))}
                             </List>
-                          </Text>
+                          </div>
                         </AlertDescription>
                       </Alert>
                     )}
@@ -685,13 +683,13 @@ export const AddUserStep = forwardRef<UserStepRef, AddUserStepProps & MotionProp
                               ) : (
                                 <Alert variant="destructive">
                                   <AlertTitle>
-                                    <Text className="flex items-center gap-2" variant="label">
+                                    <div className="flex items-center gap-2 text-label">
                                       <CircleAlert size={15} />
                                       User will not be able to read from topic
-                                    </Text>
+                                    </div>
                                   </AlertTitle>
                                   <AlertDescription>
-                                    <Text variant="small">
+                                    <div className="text-body-sm">
                                       You will need to configure{' '}
                                       <TanStackRouterLink
                                         rel="noopener noreferrer"
@@ -706,7 +704,7 @@ export const AddUserStep = forwardRef<UserStepRef, AddUserStepProps & MotionProp
                                       </TanStackRouterLink>{' '}
                                       for custom user permissions if you want the user to be able to read from the
                                       topic.
-                                    </Text>
+                                    </div>
                                   </AlertDescription>
                                 </Alert>
                               )}
@@ -773,7 +771,7 @@ export const AddUserStep = forwardRef<UserStepRef, AddUserStepProps & MotionProp
                             <CircleAlert className="h-4 w-4" /> User has required consumer group permissions
                           </AlertTitle>
                           <AlertDescription>
-                            <Text as="div" variant="small">
+                            <div className="text-body-sm">
                               The user <b>{existingUserSelected?.name}</b> has the following permissions for the{' '}
                               <b>{watchedConsumerGroup}</b> consumer group:
                               <List>
@@ -781,7 +779,7 @@ export const AddUserStep = forwardRef<UserStepRef, AddUserStepProps & MotionProp
                                   <ListItem key={permission}>{getACLOperationName(permission)}</ListItem>
                                 ))}
                               </List>
-                            </Text>
+                            </div>
                           </AlertDescription>
                         </Alert>
                       )}
@@ -793,13 +791,13 @@ export const AddUserStep = forwardRef<UserStepRef, AddUserStepProps & MotionProp
                           userConsumerGroupPermissions.missingPermissions.length > 0)) && (
                         <Alert variant="warning">
                           <AlertTitle>
-                            <Text className="flex items-center gap-2" variant="label">
+                            <div className="flex items-center gap-2 text-label">
                               <CircleAlert size={15} />
                               Consumer group permissions will be configured
-                            </Text>
+                            </div>
                           </AlertTitle>
                           <AlertDescription>
-                            <Text variant="small">
+                            <div className="text-body-sm">
                               {existingUserSelected ? (
                                 <>
                                   The user <b>{existingUserSelected.name}</b> will be granted READ and DESCRIBE
@@ -811,7 +809,7 @@ export const AddUserStep = forwardRef<UserStepRef, AddUserStepProps & MotionProp
                                   consumer group.
                                 </>
                               )}
-                            </Text>
+                            </div>
                           </AlertDescription>
                         </Alert>
                       )}
@@ -865,11 +863,11 @@ export const AddUserStep = forwardRef<UserStepRef, AddUserStepProps & MotionProp
     }
 
     return (
-      <Card size="full" {...motionProps} animated className={className} variant="ghost">
+      <Card className={className} size="full" variant="ghost">
         {!hideTitle && (
           <CardHeader className="max-w-2xl">
             <CardTitle>
-              <Heading level={2}>Configure a user with permissions</Heading>
+              <h2 className="text-heading-lg">Configure a user with permissions</h2>
             </CardTitle>
             <CardDescription className="mt-4">
               Select or create a SASL-SCRAM user that can interact with this topic.

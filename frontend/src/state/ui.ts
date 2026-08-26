@@ -205,15 +205,6 @@ type UISettings = {
   perTopicSettings: TopicDetailsSettings[]; // don't use directly, instead use uiState.topicDetails
   topicDetailsActiveTabKey: TopicTabId | undefined;
 
-  topicDetailsShowStatisticsBar: boolean; // for now: global for all topic details
-  autoRefreshIntervalSecs: number;
-  jsonViewer: {
-    fontSize: string;
-    lineHeight: string;
-    maxStringLength: number;
-    collapsed: number;
-  };
-
   // todo: refactor into: brokers.list, brokers.detail, topics.messages, topics.config, ...
   brokerList: {
     hideEmptyColumns: boolean;
@@ -264,6 +255,24 @@ type UISettings = {
     configViewType: 'structured' | 'table';
   };
 
+  topicConsumersList: {
+    pageSize: number;
+    sortId: string;
+    sortDesc: boolean;
+  };
+
+  topicPartitionsList: {
+    pageSize: number;
+    sortId: string;
+    sortDesc: boolean;
+  };
+
+  topicAclList: {
+    pageSize: number;
+    sortId: string;
+    sortDesc: boolean;
+  };
+
   clusterOverview: {
     connectorsList: {
       quickSearch: string;
@@ -283,10 +292,6 @@ type UISettings = {
     quickSearch: string;
   };
 
-  knowledgeBaseList: {
-    quickSearch: string;
-  };
-
   rpcnSecretList: {
     quickSearch: string;
   };
@@ -298,7 +303,6 @@ type UISettings = {
 
   consumerGroupDetails: {
     pageSize: number;
-    showStatisticsBar: boolean;
   };
 
   aclList: {
@@ -384,15 +388,6 @@ const defaultUiSettings: UISettings = {
   perTopicSettings: [] as TopicDetailsSettings[], // don't use directly, instead use uiState.topicDetails
   topicDetailsActiveTabKey: undefined as TopicTabId | undefined,
 
-  topicDetailsShowStatisticsBar: true, // for now: global for all topic details
-  autoRefreshIntervalSecs: 10,
-  jsonViewer: {
-    fontSize: '12px',
-    lineHeight: '1em',
-    maxStringLength: 200,
-    collapsed: 2,
-  },
-
   // todo: refactor into: brokers.list, brokers.detail, topics.messages, topics.config, ...
   brokerList: {
     hideEmptyColumns: false,
@@ -443,6 +438,24 @@ const defaultUiSettings: UISettings = {
     configViewType: 'structured' as 'structured' | 'table',
   },
 
+  topicConsumersList: {
+    pageSize: 20,
+    sortId: '',
+    sortDesc: false,
+  },
+
+  topicPartitionsList: {
+    pageSize: 20,
+    sortId: '',
+    sortDesc: false,
+  },
+
+  topicAclList: {
+    pageSize: 20,
+    sortId: '',
+    sortDesc: false,
+  },
+
   clusterOverview: {
     connectorsList: {
       quickSearch: '',
@@ -462,10 +475,6 @@ const defaultUiSettings: UISettings = {
     quickSearch: '',
   },
 
-  knowledgeBaseList: {
-    quickSearch: '',
-  },
-
   rpcnSecretList: {
     quickSearch: '',
   },
@@ -477,7 +486,6 @@ const defaultUiSettings: UISettings = {
 
   consumerGroupDetails: {
     pageSize: DEFAULT_TABLE_PAGE_SIZE,
-    showStatisticsBar: true,
   },
 
   aclList: {

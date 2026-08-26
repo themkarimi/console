@@ -24,6 +24,7 @@ import {
 import { Link } from '@tanstack/react-router';
 import { CheckIcon, CloseIcon, TrashIcon } from 'components/icons';
 import type { FC } from 'react';
+import { docsLinks } from 'utils/docs-links';
 
 import { openDeleteModal } from './modals';
 import {
@@ -120,7 +121,7 @@ const TransformsListContent: FC = () => {
         Data transforms let you run common data streaming tasks, like filtering, scrubbing, and transcoding, within
         Redpanda.{' '}
         <ChakraLink
-          href="https://docs.redpanda.com/current/develop/data-transforms/how-transforms-work/"
+          href={docsLinks.selfManaged.dataTransforms}
           isExternal
           style={{ textDecoration: 'underline solid 1px' }}
         >
@@ -224,6 +225,7 @@ const TransformsListContent: FC = () => {
                 <Button
                   color="gray.500"
                   height="16px"
+                  isDisabled={api.userData?.canDeleteTransforms === false}
                   onClick={(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
                     e.stopPropagation();
                     e.preventDefault();
@@ -251,7 +253,6 @@ const TransformsListContent: FC = () => {
                         });
                     });
                   }}
-                  isDisabled={api.userData?.canDeleteTransforms === false}
                   variant="icon"
                 >
                   <TrashIcon />

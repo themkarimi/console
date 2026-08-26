@@ -17,20 +17,19 @@ import { type ColumnDef, flexRender, getCoreRowModel, useReactTable } from '@tan
 import { Button } from 'components/redpanda-ui/components/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from 'components/redpanda-ui/components/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from 'components/redpanda-ui/components/tooltip';
-import { Text } from 'components/redpanda-ui/components/typography';
 import { Loader2, Plus, RefreshCw } from 'lucide-react';
 import type { ListShadowLinksResponse_ShadowLink } from 'protogen/redpanda/api/console/v1alpha1/shadowlink_pb';
 import React, { useEffect } from 'react';
 import { useListShadowLinksQuery } from 'react-query/api/shadowlink';
 import { toast } from 'sonner';
 import { uiState } from 'state/ui-state';
-import { api } from 'state/backend-api';
 
 import {
   ShadowLinkEmptyState,
   ShadowLinkEmptyStateCloud,
   ShadowLinkErrorState,
   ShadowLinkFeatureDisabledState,
+  ShadowLinkNoPermissionState,
   ShadowLinkUnavailableState,
 } from './shadowlink-empty-state';
 import { isEmbedded } from '../../../../config';
@@ -84,23 +83,23 @@ export const createColumns: ColumnDef<ListShadowLinksResponse_ShadowLink>[] = [
   {
     accessorKey: 'name',
     header: 'Name',
-    cell: ({ row }) => <Text className="font-medium">{row.getValue('name')}</Text>,
+    cell: ({ row }) => <div className="font-medium text-body">{row.getValue('name')}</div>,
   },
   {
     id: 'sourceCluster',
     accessorFn: (row) => row.bootstrapServers.join(',') || 'N/A',
     header: 'Source cluster',
     cell: ({ row }) => (
-      <Text className="font-mono text-muted-foreground" variant="small">
+      <div className="font-mono text-body-sm text-muted-foreground">
         {row.original.bootstrapServers.join(',') || 'N/A'}
-      </Text>
+      </div>
     ),
   },
   {
     id: 'status',
     accessorFn: (row) => row.state,
     header: 'Status',
-    cell: ({ row }) => <Text> {getShadowLinkStateLabel(row.original?.state)} </Text>,
+    cell: ({ row }) => <div className="text-body"> {getShadowLinkStateLabel(row.original?.state)} </div>,
   },
 ];
 
@@ -123,7 +122,12 @@ export const ShadowLinkListPage = () => {
 
   // Show toast on error (except for feature-disabled or unavailable admin API errors)
   useEffect(() => {
-    if (error && error.code !== Code.FailedPrecondition && error.code !== Code.Unavailable) {
+    if (
+      error &&
+      error.code !== Code.FailedPrecondition &&
+      error.code !== Code.Unavailable &&
+      error.code !== Code.PermissionDenied
+    ) {
       toast.error('Failed to load shadowlinks', {
         description: error.message,
       });
@@ -147,6 +151,15 @@ export const ShadowLinkListPage = () => {
     return (
       <div className="my-2 flex justify-center gap-2">
         <ShadowLinkUnavailableState />
+      </div>
+    );
+  }
+
+  // No permission state
+  if (error?.code === Code.PermissionDenied) {
+    return (
+      <div className="my-2 flex justify-center gap-2">
+        <ShadowLinkNoPermissionState />
       </div>
     );
   }
@@ -192,9 +205,9 @@ export const ShadowLinkListPage = () => {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <Text variant="muted">
+        <div className="text-body text-muted-foreground">
           Manage shadow links to replicate topics from source clusters for disaster recovery and high availability.
-        </Text>
+        </div>
 
         <div className="flex items-center gap-2">
           <Button
@@ -208,26 +221,24 @@ export const ShadowLinkListPage = () => {
           </Button>
 
           <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <span className="inline-block">
-                <Button
-                  disabled={hasShadowLink || api.userData?.canCreateTopics === false}
-                  onClick={() => navigate({ to: '/shadowlinks/create' })}
-                  size="sm"
-                  variant="primary"
-                >
-                  <Plus className="h-4 w-4" />
-                  Create shadow link
-                </Button>
-              </span>
-            </TooltipTrigger>
-            {(hasShadowLink || api.userData?.canCreateTopics === false) && (
+            <TooltipTrigger
+              render={
+                <span className="inline-block">
+                  <Button
+                    disabled={hasShadowLink}
+                    onClick={() => navigate({ to: '/shadowlinks/create' })}
+                    size="sm"
+                    variant="primary"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Create shadow link
+                  </Button>
+                </span>
+              }
+            />
+            {Boolean(hasShadowLink) && (
               <TooltipContent>
-                <p>
-                  {api.userData?.canCreateTopics === false
-                    ? "You don't have permission to create shadow links"
-                    : 'Only one shadowlink can be created at this time'}
-                </p>
+                <p>Only one shadowlink can be created at this time</p>
               </TooltipContent>
             )}
           </Tooltip>

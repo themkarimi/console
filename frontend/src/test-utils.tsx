@@ -5,7 +5,13 @@ import { ChakraProvider } from '@redpanda-data/ui';
 import { QueryClient, type QueryClientConfig, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryHistory, createRouter, RouterContextProvider } from '@tanstack/react-router';
 import { type RenderOptions, render } from '@testing-library/react';
-import React, { type JSXElementConstructor, type PropsWithChildren, type ReactElement, useState } from 'react';
+import React, {
+  type JSX,
+  type JSXElementConstructor,
+  type PropsWithChildren,
+  type ReactElement,
+  useState,
+} from 'react';
 import { patchedRedpandaTheme as redpandaTheme } from 'utils/redpanda-theme';
 
 import { TooltipProvider } from './components/redpanda-ui/components/tooltip';
@@ -29,7 +35,7 @@ interface ExtendedRenderOptions extends Omit<RenderOptions, 'queries'> {
 //
 // `cleanupTestHarness` is kept in a separate module so that
 // `vitest.setup.integration.ts` does not transitively import `routeTree.gen`
-// (and therefore `config`), which would pin `isEmbedded`/`isAdpEnabled` live
+// (and therefore `config`), which would pin `isEmbedded` live
 // bindings before test files' `vi.mock('config', ...)` hoists can take
 // effect.
 import { trackedQueryClients, trackedRouters } from '../tests/harness-cleanup';

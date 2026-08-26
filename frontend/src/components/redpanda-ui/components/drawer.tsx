@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import { Drawer as DrawerPrimitive } from 'vaul';
 
@@ -15,8 +17,8 @@ function DrawerPortal({ ...props }: React.ComponentProps<typeof DrawerPrimitive.
   return <DrawerPrimitive.Portal data-slot="drawer-portal" {...props} />;
 }
 
-function DrawerClose({ ...props }: React.ComponentProps<typeof DrawerPrimitive.Close>) {
-  return <DrawerPrimitive.Close data-slot="drawer-close" {...props} />;
+function DrawerClose({ className, ...props }: React.ComponentProps<typeof DrawerPrimitive.Close>) {
+  return <DrawerPrimitive.Close className={cn('cursor-pointer', className)} data-slot="drawer-close" {...props} />;
 }
 
 function DrawerOverlay({ className, ...props }: React.ComponentProps<typeof DrawerPrimitive.Overlay>) {
@@ -36,6 +38,7 @@ type DrawerContentProps = React.ComponentProps<typeof DrawerPrimitive.Content> &
   SharedProps &
   Pick<FixedPositionContentProps, 'container' | 'showOverlay' | 'onOpenAutoFocus'>;
 
+// Drawer is vaul (Radix-derived), not Base UI — it keeps `onOpenAutoFocus` (no `initialFocus` equivalent).
 function DrawerContent({
   className,
   children,
@@ -81,7 +84,7 @@ function DrawerFooter({ className, ...props }: React.ComponentProps<'div'>) {
 function DrawerTitle({ className, ...props }: React.ComponentProps<typeof DrawerPrimitive.Title>) {
   return (
     <DrawerPrimitive.Title
-      className={cn('font-semibold text-foreground', className)}
+      className={cn('text-foreground text-heading-md', className)}
       data-slot="drawer-title"
       {...props}
     />
@@ -91,7 +94,7 @@ function DrawerTitle({ className, ...props }: React.ComponentProps<typeof Drawer
 function DrawerDescription({ className, ...props }: React.ComponentProps<typeof DrawerPrimitive.Description>) {
   return (
     <DrawerPrimitive.Description
-      className={cn('text-muted-foreground text-sm', className)}
+      className={cn('text-body text-muted-foreground', className)}
       data-slot="drawer-description"
       {...props}
     />
